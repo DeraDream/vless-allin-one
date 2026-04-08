@@ -78,6 +78,8 @@ curl -fsSL https://raw.githubusercontent.com/DeraDream/vless-allin-one/main/inst
 - 使用 `systemd` 注册服务 `vless-allin-one`
 - 以 `live` 模式启动面板
 - 默认监听 `0.0.0.0:8765`
+- 安装前自动检测并补齐 Python、Node.js、Git、jq、OpenSSL 等环境
+- 安装后再次验证环境通过才继续部署
 
 可选环境变量：
 
@@ -89,6 +91,7 @@ PANEL_HOST=0.0.0.0 \
 PANEL_MODE=live \
 PANEL_CFG=/etc/vless-reality \
 REPO_BRANCH=main \
+REQUIRE_NODE=true \
 bash install.sh
 ```
 

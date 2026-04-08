@@ -10,6 +10,7 @@ PANEL_MODE="${PANEL_MODE:-live}"
 PANEL_CFG="${PANEL_CFG:-/etc/vless-reality}"
 REPO_URL="${REPO_URL:-https://github.com/DeraDream/vless-allin-one.git}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
+REQUIRE_NODE="${REQUIRE_NODE:-true}"
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -45,19 +46,72 @@ install_packages() {
   case "$pm" in
     apt)
       apt-get update -y
-      DEBIAN_FRONTEND=noninteractive apt-get install -y git curl wget python3 ca-certificates
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        git curl wget python3 python3-venv python3-pip ca-certificates jq openssl
+      if [[ "$REQUIRE_NODE" == "true" ]]; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs npm || true
+      fi
       ;;
     dnf)
-      dnf install -y git curl wget python3 ca-certificates
+      dnf install -y git curl wget python3 python3-pip ca-certificates jq openssl
+      [[ "$REQUIRE_NODE" == "true" ]] && dnf install -y nodejs npm || true
       ;;
     yum)
-      yum install -y git curl wget python3 ca-certificates
+      yum install -y git curl wget python3 python3-pip ca-certificates jq openssl
+      [[ "$REQUIRE_NODE" == "true" ]] && yum install -y nodejs npm || true
       ;;
     apk)
       apk update
-      apk add --no-cache git curl wget python3 ca-certificates
+      apk add --no-cache git curl wget python3 py3-pip ca-certificates jq openssl bash
+      [[ "$REQUIRE_NODE" == "true" ]] && apk add --no-cache nodejs npm || true
       ;;
   esac
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+python_version_ok() {
+  python3 - <<'PY' >/dev/null 2>&1
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 8) else 1)
+PY
+}
+
+node_version_ok() {
+  node - <<'JS' >/dev/null 2>&1
+const major = Number(process.versions.node.split('.')[0]);
+process.exit(major >= 18 ? 0 : 1);
+JS
+}
+
+verify_environment() {
+  log "执行环境检测..."
+
+  local required_cmds missing=()
+  required_cmds=(git curl wget python3 jq openssl systemctl bash)
+
+  for cmd in "${required_cmds[@]}"; do
+    command_exists "$cmd" || missing+=("$cmd")
+  done
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    fail "安装后仍缺少依赖: ${missing[*]}"
+  fi
+
+  python_version_ok || fail "需要 Python 3.8+"
+
+  local bash_major="${BASH_VERSINFO[0]:-0}"
+  [[ "$bash_major" -ge 4 ]] || fail "需要 Bash 4+，当前版本不满足"
+
+  if [[ "$REQUIRE_NODE" == "true" ]]; then
+    command_exists node || fail "需要 Node.js，但未安装成功"
+    command_exists npm || fail "需要 npm，但未安装成功"
+    node_version_ok || fail "需要 Node.js 18+"
+  fi
+
+  log "环境检测通过"
 }
 
 ensure_systemd() {
@@ -150,6 +204,7 @@ main() {
   need_root
   ensure_systemd
   install_packages
+  verify_environment
   fetch_repo
   prepare_runtime
   write_service
