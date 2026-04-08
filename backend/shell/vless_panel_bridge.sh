@@ -61,6 +61,15 @@ singbox_bin() {
   return 1
 }
 
+service_state_json() {
+  local service_name="$1"
+  if svc status "$service_name" >/dev/null 2>&1; then
+    printf '%s' 'running'
+  else
+    printf '%s' 'stopped'
+  fi
+}
+
 reality_keys_generate() {
   local bin
   bin="$(xray_bin)" || return 1
@@ -596,60 +605,63 @@ emit_dashboard() {
 }
 
 emit_protocols() {
+  local xray_status singbox_status
+  xray_status="$(service_state_json "vless-reality")"
+  singbox_status="$(service_state_json "vless-singbox")"
   jq -c '
-    [
-      (.xray // {} | to_entries[]? | .key as $proto |
-        if (.value | type) == "array" then
-          .value[] | {
-            id: ("xray|" + $proto + "|" + ((.port // 0) | tostring)),
-            name: $proto,
-            core: "xray",
-            port: (.port // 0),
-            service: "vless-reality",
-            status: "unknown",
-            config: .,
-            created_at: ""
-          }
-        else
-          {
-            id: ("xray|" + $proto + "|" + ((.value.port // 0) | tostring)),
-            name: $proto,
-            core: "xray",
-            port: (.value.port // 0),
-            service: "vless-reality",
-            status: "unknown",
-            config: .value,
-            created_at: ""
-          }
-        end
-      ),
+      [
+        (.xray // {} | to_entries[]? | .key as $proto |
+          if (.value | type) == "array" then
+            .value[] | {
+              id: ("xray|" + $proto + "|" + ((.port // 0) | tostring)),
+              name: $proto,
+              core: "xray",
+              port: (.port // 0),
+              service: "vless-reality",
+              status: $xray_status,
+              config: .,
+              created_at: ""
+            }
+          else
+            {
+              id: ("xray|" + $proto + "|" + ((.value.port // 0) | tostring)),
+              name: $proto,
+              core: "xray",
+              port: (.value.port // 0),
+              service: "vless-reality",
+              status: $xray_status,
+              config: .value,
+              created_at: ""
+            }
+          end
+        ),
       (.singbox // {} | to_entries[]? | .key as $proto |
         if (.value | type) == "array" then
           .value[] | {
-            id: ("singbox|" + $proto + "|" + ((.port // 0) | tostring)),
-            name: $proto,
-            core: "singbox",
-            port: (.port // 0),
-            service: "vless-singbox",
-            status: "unknown",
-            config: .,
-            created_at: ""
-          }
-        else
-          {
-            id: ("singbox|" + $proto + "|" + ((.value.port // 0) | tostring)),
-            name: $proto,
-            core: "singbox",
-            port: (.value.port // 0),
-            service: "vless-singbox",
-            status: "unknown",
-            config: .value,
-            created_at: ""
-          }
-        end
-      )
-    ] | flatten
-  ' "$DB_FILE"
+              id: ("singbox|" + $proto + "|" + ((.port // 0) | tostring)),
+              name: $proto,
+              core: "singbox",
+              port: (.port // 0),
+              service: "vless-singbox",
+              status: $singbox_status,
+              config: .,
+              created_at: ""
+            }
+          else
+            {
+              id: ("singbox|" + $proto + "|" + ((.value.port // 0) | tostring)),
+              name: $proto,
+              core: "singbox",
+              port: (.value.port // 0),
+              service: "vless-singbox",
+              status: $singbox_status,
+              config: .value,
+              created_at: ""
+            }
+          end
+        )
+      ] | flatten
+    ' --arg xray_status "$xray_status" --arg singbox_status "$singbox_status" "$DB_FILE"
 }
 
 emit_cores() {

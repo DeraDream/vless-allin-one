@@ -27,6 +27,7 @@ const realityServerNames = [
 
 const statusText = {
   running: "\u8fd0\u884c\u4e2d",
+  stopped: "\u5df2\u505c\u6b62",
   enabled: "\u5df2\u542f\u7528",
   warning: "\u544a\u8b66",
   disabled: "\u5df2\u505c\u7528",
@@ -595,6 +596,7 @@ function notify(message) {
 function badgeClass(status) {
   if (status === "running" || status === "enabled") return "green";
   if (status === "warning" || status === "manual") return "amber";
+  if (status === "stopped" || status === "disabled") return "red";
   return "red";
 }
 
