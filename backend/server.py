@@ -228,6 +228,10 @@ class InstallTaskManager:
         with self._lock:
             self._set_progress(8, "已创建安装前备份")
 
+        self._write_runtime_log(
+            "install-runtime",
+            f"install request: protocol={payload.get('protocol', '')}, port={payload.get('port', '')}, domain={payload.get('domain', '')}, cert_mode={payload.get('cert_mode', '')}",
+        )
         process = self.adapter.start_install_process(payload)
         with self._lock:
             self._process = process

@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import glob
@@ -277,9 +278,12 @@ class LiveAdapter(BaseAdapter):
     def _run(self, command: str, payload: Optional[Dict[str, Any]] = None) -> Any:
         env = os.environ.copy()
         env["VLESS_CFG"] = self.cfg_dir
+        env.pop("PANEL_PAYLOAD", None)
+        env.pop("PANEL_PAYLOAD_B64", None)
         args = [self.bridge, command]
         if payload is not None:
-            args.append(json.dumps(payload, ensure_ascii=True))
+            raw = json.dumps(payload, ensure_ascii=True).encode("utf-8")
+            env["PANEL_PAYLOAD_B64"] = base64.b64encode(raw).decode("ascii")
         proc = subprocess.run(
             args,
             cwd=self.root_dir,
@@ -302,7 +306,10 @@ class LiveAdapter(BaseAdapter):
     def start_install_process(self, payload: Dict[str, Any]):
         env = os.environ.copy()
         env["VLESS_CFG"] = self.cfg_dir
-        args = [self.bridge, "install", json.dumps(payload, ensure_ascii=True)]
+        env.pop("PANEL_PAYLOAD", None)
+        raw = json.dumps(payload, ensure_ascii=True).encode("utf-8")
+        env["PANEL_PAYLOAD_B64"] = base64.b64encode(raw).decode("ascii")
+        args = [self.bridge, "install"]
         return subprocess.Popen(
             args,
             cwd=self.root_dir,

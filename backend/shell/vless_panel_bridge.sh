@@ -7,7 +7,11 @@ CFG_DIR="${VLESS_CFG:-/etc/vless-reality}"
 DB_FILE="$CFG_DIR/db.json"
 
 command="${1:-}"
-payload="${2:-{}}"
+payload_b64="${PANEL_PAYLOAD_B64:-}"
+payload="${PANEL_PAYLOAD:-${2:-{}}}"
+if [[ -n "$payload_b64" ]]; then
+  payload="$(printf '%s' "$payload_b64" | base64 -d 2>/dev/null || true)"
+fi
 
 if [[ -z "${BASH_VERSINFO:-}" || "${BASH_VERSINFO[0]}" -lt 4 ]]; then
   json_fail() {
@@ -38,7 +42,12 @@ progress_emit() {
 
 payload_get() {
   local key="$1"
+  payload_validate || { json_fail "安装参数解析失败"; exit 1; }
   printf '%s' "$payload" | jq -r --arg key "$key" '.[$key] // empty'
+}
+
+payload_validate() {
+  printf '%s' "$payload" | jq -e . >/dev/null 2>&1
 }
 
 ensure_base_dependencies() {
@@ -100,6 +109,21 @@ panel_reload_all_routing() {
   panel_reload_core "singbox"
 }
 
+panel_remove_protocol_state() {
+  local core="$1"
+  local protocol="$2"
+  local ports
+  ports="$(db_list_ports "$core" "$protocol" 2>/dev/null || true)"
+  if [[ -n "$ports" ]]; then
+    while IFS= read -r existing_port; do
+      [[ -z "$existing_port" ]] && continue
+      db_remove_port "$core" "$protocol" "$existing_port" >/dev/null 2>&1 || true
+    done <<< "$ports"
+  fi
+  db_del "$core" "$protocol" >/dev/null 2>&1 || true
+  panel_reload_core "$core"
+}
+
 panel_reload_services() {
   panel_reload_core "xray"
   panel_reload_core "singbox"
@@ -110,7 +134,7 @@ panel_install_protocol() {
   ensure_base_dependencies
   progress_emit "检查安装参数"
 
-  local protocol port domain transport cert_mode notes short_id server_name
+  local protocol port domain transport cert_mode notes short_id server_name core
   protocol="$(payload_get protocol)"
   port="$(payload_get port)"
   domain="$(payload_get domain)"
@@ -119,6 +143,11 @@ panel_install_protocol() {
   notes="$(payload_get notes)"
   short_id="$(payload_get short_id)"
   server_name="$(payload_get server_name)"
+  core="$(panel_protocol_core "$protocol")"
+  if db_exists "$core" "$protocol"; then
+    progress_emit "检测到已安装同协议，先彻底卸载旧配置"
+    panel_remove_protocol_state "$core" "$protocol"
+  fi
 
   [[ -z "$protocol" || -z "$port" ]] && { json_fail "缺少协议或端口"; exit 1; }
 
@@ -702,14 +731,16 @@ emit_subscriptions() {
 }
 
 emit_routing() {
-  jq -c '.routing_rules // [] | map({
-    id: (.id // ((.type // "rule") + "-unknown")),
-    rule_type: (.type // "custom"),
-    target: (.domains // ""),
-    outbound: (.outbound // "direct"),
-    ip_strategy: (.ip_version // "prefer_ipv4"),
-    priority: 0
-  }) | to_entries | map(.value + {priority:(.key + 1)})' "$DB_FILE"
+  jq -c '.routing_rules // []
+    | to_entries
+    | map({
+        id: (.value.id // ("row-" + ((.key + 1) | tostring))),
+        rule_type: (.value.type // "custom"),
+        target: (.value.domains // ""),
+        outbound: (.value.outbound // "direct"),
+        ip_strategy: (.value.ip_version // "prefer_ipv4"),
+        priority: (.key + 1)
+      })' "$DB_FILE"
 }
 
 case "$command" in
