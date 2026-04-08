@@ -339,6 +339,22 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data = ADAPTER.list_routing()
             elif path == "/api/install/status":
                 data = INSTALL_MANAGER.status()
+            elif path == "/api/logs":
+                limit = int((query.get("limit") or ["120"])[0])
+                install_status = INSTALL_MANAGER.status()
+                install_lines = [
+                    {
+                        "time": item.get("time", ""),
+                        "source": "install-task",
+                        "level": item.get("level", "info"),
+                        "message": item.get("text", ""),
+                    }
+                    for item in install_status.get("events", [])
+                ]
+                data = {
+                    "lines": (ADAPTER.read_logs(limit) + install_lines)[-limit:],
+                    "install": install_status,
+                }
             else:
                 self.send_error(HTTPStatus.NOT_FOUND, "API not found")
                 return
@@ -356,13 +372,19 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/install/cancel" and method == "POST":
                 result = INSTALL_MANAGER.cancel()
             elif parsed.path == "/api/uninstall" and method == "POST":
-                result = ADAPTER.uninstall_protocol(int(payload["id"]))
+                result = ADAPTER.uninstall_protocol(payload["id"])
             elif parsed.path == "/api/core/update" and method == "POST":
-                result = ADAPTER.update_core(payload["name"], payload["target_version"])
+                result = ADAPTER.update_core(
+                    payload["name"],
+                    payload["target_version"],
+                    payload.get("channel", "stable"),
+                )
+            elif parsed.path == "/api/core/uninstall" and method == "POST":
+                result = ADAPTER.uninstall_core(payload["name"])
             elif parsed.path == "/api/users" and method == "POST":
                 result = ADAPTER.create_user(payload)
             elif parsed.path == "/api/users" and method == "DELETE":
-                result = ADAPTER.delete_user(int(payload["id"]))
+                result = ADAPTER.delete_user(payload["id"])
             elif parsed.path == "/api/subscriptions/reset" and method == "POST":
                 result = ADAPTER.reset_subscription_uuid(int(payload["id"]))
             elif parsed.path == "/api/subscriptions/update" and method == "POST":
@@ -370,7 +392,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/routing" and method == "POST":
                 result = ADAPTER.add_routing(payload)
             elif parsed.path == "/api/routing" and method == "DELETE":
-                result = ADAPTER.delete_routing(int(payload["id"]))
+                result = ADAPTER.delete_routing(payload["id"])
             else:
                 self.send_error(HTTPStatus.NOT_FOUND, "API write endpoint not found")
                 return

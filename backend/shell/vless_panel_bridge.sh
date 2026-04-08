@@ -268,9 +268,32 @@ panel_uninstall_protocol() {
 
 panel_update_core() {
   ensure_base_dependencies
-  local name target
+  local name target channel
   name="$(payload_get name)"
   target="$(payload_get target_version)"
+  channel="$(payload_get channel)"
+  [[ -z "$channel" ]] && channel="stable"
+  if [[ -z "$target" ]]; then
+    case "$name" in
+      Xray)
+        if [[ "$channel" == "beta" || "$channel" == "prerelease" ]]; then
+          target="$(_get_cached_prerelease_with_fallback "XTLS/Xray-core" 2>/dev/null || true)"
+        else
+          target="$(_get_cached_version_with_fallback "XTLS/Xray-core" 2>/dev/null || true)"
+        fi
+        ;;
+      Sing-box)
+        if [[ "$channel" == "beta" || "$channel" == "prerelease" ]]; then
+          target="$(_get_cached_prerelease_with_fallback "SagerNet/sing-box" 2>/dev/null || true)"
+        else
+          target="$(_get_cached_version_with_fallback "SagerNet/sing-box" 2>/dev/null || true)"
+        fi
+        ;;
+      "Snell v5")
+        target="$(_get_cached_version_with_fallback "surge-networks/snell" 2>/dev/null || true)"
+        ;;
+    esac
+  fi
   [[ -z "$name" || -z "$target" || "$target" == "unknown" ]] && { json_fail "目标版本无效"; exit 1; }
 
   case "$name" in
@@ -293,6 +316,44 @@ panel_update_core() {
   esac
 
   json_ok "$name 已更新到 $target"
+}
+
+panel_uninstall_core() {
+  local name
+  name="$(payload_get name)"
+  [[ -z "$name" ]] && { json_fail "核心名称不能为空"; exit 1; }
+
+  case "$name" in
+    Xray)
+      [[ -n "$(get_xray_protocols 2>/dev/null || true)" ]] && { json_fail "Xray 仍有已安装协议，请先卸载协议"; exit 1; }
+      svc stop vless-reality >/dev/null 2>&1 || true
+      svc disable vless-reality >/dev/null 2>&1 || true
+      rm -f /usr/local/bin/xray /usr/bin/xray
+      rm -f /etc/systemd/system/vless-reality.service "$CFG/config.json"
+      command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload >/dev/null 2>&1 || true
+      ;;
+    Sing-box)
+      [[ -n "$(get_singbox_protocols 2>/dev/null || true)" ]] && { json_fail "Sing-box 仍有已安装协议，请先卸载协议"; exit 1; }
+      svc stop vless-singbox >/dev/null 2>&1 || true
+      svc disable vless-singbox >/dev/null 2>&1 || true
+      rm -f /usr/local/bin/sing-box /usr/bin/sing-box
+      rm -f /etc/systemd/system/vless-singbox.service "$CFG/singbox.json"
+      command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload >/dev/null 2>&1 || true
+      ;;
+    "Snell v5")
+      svc stop vless-snell-v5 >/dev/null 2>&1 || true
+      svc disable vless-snell-v5 >/dev/null 2>&1 || true
+      rm -f /usr/local/bin/snell-server-v5 /usr/bin/snell-server-v5
+      rm -f /etc/systemd/system/vless-snell-v5.service "$CFG/snell-v5.conf"
+      command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload >/dev/null 2>&1 || true
+      ;;
+    *)
+      json_fail "未知核心: $name"
+      exit 1
+      ;;
+  esac
+
+  json_ok "$name 已卸载"
 }
 
 panel_create_user() {
@@ -522,11 +583,35 @@ emit_protocols() {
 }
 
 emit_cores() {
-  jq -n '[
-    {name:"Xray", current_version:"unknown", latest_version:"unknown", channel:"live", needs_update:0},
-    {name:"Sing-box", current_version:"unknown", latest_version:"unknown", channel:"live", needs_update:0},
-    {name:"Snell v5", current_version:"unknown", latest_version:"unknown", channel:"live", needs_update:0}
-  ]'
+  _refresh_core_versions_async "all" >/dev/null 2>&1 || true
+  local xray_current singbox_current snell_current
+  local xray_stable xray_beta singbox_stable singbox_beta snell_stable snell_beta
+  xray_current="$(_get_core_version "xray" 2>/dev/null || echo unknown)"
+  singbox_current="$(_get_core_version "sing-box" 2>/dev/null || echo unknown)"
+  snell_current="$(_get_core_version "snell-server-v5" 2>/dev/null || echo unknown)"
+  xray_stable="$(_get_cached_version_with_fallback "XTLS/Xray-core" 2>/dev/null || echo unknown)"
+  xray_beta="$(_get_cached_prerelease_with_fallback "XTLS/Xray-core" 2>/dev/null || true)"
+  singbox_stable="$(_get_cached_version_with_fallback "SagerNet/sing-box" 2>/dev/null || echo unknown)"
+  singbox_beta="$(_get_cached_prerelease_with_fallback "SagerNet/sing-box" 2>/dev/null || true)"
+  snell_stable="$(_get_cached_version_with_fallback "surge-networks/snell" 2>/dev/null || echo unknown)"
+  snell_beta="无"
+  [[ -z "$xray_beta" ]] && xray_beta="$xray_stable"
+  [[ -z "$singbox_beta" ]] && singbox_beta="$singbox_stable"
+  jq -n \
+    --arg xray_current "$xray_current" \
+    --arg xray_stable "$xray_stable" \
+    --arg xray_beta "$xray_beta" \
+    --arg singbox_current "$singbox_current" \
+    --arg singbox_stable "$singbox_stable" \
+    --arg singbox_beta "$singbox_beta" \
+    --arg snell_current "$snell_current" \
+    --arg snell_stable "$snell_stable" \
+    --arg snell_beta "$snell_beta" \
+    '[
+      {name:"Xray", current_version:$xray_current, latest_version:$xray_stable, stable_version:$xray_stable, beta_version:$xray_beta, channel:"stable", needs_update:(if $xray_current != $xray_stable then 1 else 0 end)},
+      {name:"Sing-box", current_version:$singbox_current, latest_version:$singbox_stable, stable_version:$singbox_stable, beta_version:$singbox_beta, channel:"stable", needs_update:(if $singbox_current != $singbox_stable then 1 else 0 end)},
+      {name:"Snell v5", current_version:$snell_current, latest_version:$snell_stable, stable_version:$snell_stable, beta_version:$snell_beta, channel:"stable", needs_update:(if $snell_current != $snell_stable then 1 else 0 end)}
+    ]'
 }
 
 emit_users() {
@@ -636,6 +721,7 @@ case "$command" in
   install) panel_install_protocol ;;
   uninstall) panel_uninstall_protocol ;;
   core-update) panel_update_core ;;
+  core-uninstall) panel_uninstall_core ;;
   user-create) panel_create_user ;;
   user-delete) panel_delete_user ;;
   reload-services) panel_reload_services ;;

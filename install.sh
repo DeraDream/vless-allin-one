@@ -4,13 +4,13 @@ set -euo pipefail
 APP_NAME="vless-allin-one"
 INSTALL_DIR="${INSTALL_DIR:-/opt/${APP_NAME}}"
 SERVICE_NAME="${SERVICE_NAME:-vless-allin-one}"
-PANEL_PORT="${PANEL_PORT:-8765}"
+PANEL_PORT="${PANEL_PORT:-}"
 PANEL_HOST="${PANEL_HOST:-0.0.0.0}"
 PANEL_MODE="${PANEL_MODE:-live}"
 PANEL_CFG="${PANEL_CFG:-/etc/vless-reality}"
 REPO_URL="${REPO_URL:-https://github.com/DeraDream/vless-allin-one.git}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
-REQUIRE_NODE="${REQUIRE_NODE:-true}"
+REQUIRE_NODE="${REQUIRE_NODE:-false}"
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -19,6 +19,17 @@ log() {
 fail() {
   log "ERROR: $*"
   exit 1
+}
+
+random_panel_port() {
+  shuf -i 20000-40000 -n 1 2>/dev/null || awk 'BEGIN{srand(); print int(20000 + rand() * 20000)}'
+}
+
+resolve_panel_port() {
+  if [[ -z "$PANEL_PORT" ]]; then
+    PANEL_PORT="$(random_panel_port)"
+    log "未指定面板端口，已自动分配随机端口: ${PANEL_PORT}"
+  fi
 }
 
 need_root() {
@@ -139,7 +150,81 @@ prepare_runtime() {
     "$INSTALL_DIR/run_local.sh" \
     "$INSTALL_DIR/deploy_vps.sh" \
     "$INSTALL_DIR/backend/shell/vless_panel_bridge.sh" \
-    "$INSTALL_DIR/install.sh"
+    "$INSTALL_DIR/install.sh" \
+    "$INSTALL_DIR/vless-server.sh"
+}
+
+write_cli() {
+  log "Writing CLI launcher: /usr/local/bin/vless"
+  cat >"/usr/local/bin/vless" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="${INSTALL_DIR}"
+PANEL_SERVICE="${SERVICE_NAME}"
+
+show_menu() {
+  echo ""
+  echo "VLESS control menu"
+  echo "1. Open script main menu"
+  echo "2. Show panel status"
+  echo "3. Restart panel"
+  echo "4. Stop panel"
+  echo "5. Start panel"
+  echo "6. Show live logs"
+  echo "7. Update project"
+  echo "8. Uninstall panel"
+  echo "0. Exit"
+  echo ""
+  read -rp "Select: " choice
+  case "\$choice" in
+    1) bash "\$APP_DIR/vless-server.sh" ;;
+    2) systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
+    3) systemctl restart "\$PANEL_SERVICE" && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
+    4) systemctl stop "\$PANEL_SERVICE" ;;
+    5) systemctl start "\$PANEL_SERVICE" && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
+    6) journalctl -u "\$PANEL_SERVICE" -f ;;
+    7) git -C "\$APP_DIR" fetch --all --tags && git -C "\$APP_DIR" pull --ff-only && systemctl restart "\$PANEL_SERVICE" ;;
+    8)
+      read -rp "Confirm uninstall panel and launcher? [y/N]: " confirm
+      [[ "\$confirm" =~ ^[yY]$ ]] || exit 0
+      systemctl stop "\$PANEL_SERVICE" 2>/dev/null || true
+      systemctl disable "\$PANEL_SERVICE" 2>/dev/null || true
+      rm -f "/etc/systemd/system/\${PANEL_SERVICE}.service"
+      systemctl daemon-reload 2>/dev/null || true
+      rm -f /usr/local/bin/vless
+      rm -rf "\$APP_DIR"
+      echo "Panel removed"
+      ;;
+    0) exit 0 ;;
+    *) echo "Invalid choice"; exit 1 ;;
+  esac
+}
+
+case "\${1:-menu}" in
+  menu) show_menu ;;
+  script) bash "\$APP_DIR/vless-server.sh" ;;
+  status) systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
+  restart) systemctl restart "\$PANEL_SERVICE" ;;
+  stop) systemctl stop "\$PANEL_SERVICE" ;;
+  start) systemctl start "\$PANEL_SERVICE" ;;
+  logs) journalctl -u "\$PANEL_SERVICE" -f ;;
+  update) git -C "\$APP_DIR" fetch --all --tags && git -C "\$APP_DIR" pull --ff-only && systemctl restart "\$PANEL_SERVICE" ;;
+  uninstall)
+    systemctl stop "\$PANEL_SERVICE" 2>/dev/null || true
+    systemctl disable "\$PANEL_SERVICE" 2>/dev/null || true
+    rm -f "/etc/systemd/system/\${PANEL_SERVICE}.service"
+    systemctl daemon-reload 2>/dev/null || true
+    rm -f /usr/local/bin/vless
+    rm -rf "\$APP_DIR"
+    ;;
+  *)
+    echo "Usage: vless [menu|script|status|restart|stop|start|logs|update|uninstall]"
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x /usr/local/bin/vless
 }
 
 write_service() {
@@ -192,6 +277,7 @@ print_summary() {
   systemctl status ${SERVICE_NAME}
   systemctl restart ${SERVICE_NAME}
   journalctl -u ${SERVICE_NAME} -f
+  vless
 
 如果面板无法访问，请检查:
   1. VPS 安全组/防火墙是否放行 ${PANEL_PORT}
@@ -202,11 +288,13 @@ EOF
 
 main() {
   need_root
+  resolve_panel_port
   ensure_systemd
   install_packages
   verify_environment
   fetch_repo
   prepare_runtime
+  write_cli
   write_service
   start_service
   print_summary

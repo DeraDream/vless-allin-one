@@ -21,6 +21,12 @@ class BaseAdapter:
     def reload_services(self) -> None:
         return None
 
+    def read_logs(self, limit: int = 120) -> List[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def uninstall_core(self, name: str) -> Dict[str, Any]:
+        raise NotImplementedError
+
 
 class MockAdapter(BaseAdapter):
     def __init__(self, store: PanelStore) -> None:
@@ -58,6 +64,22 @@ class MockAdapter(BaseAdapter):
                 "logs": recent_logs,
             }
 
+    def read_logs(self, limit: int = 120) -> List[Dict[str, Any]]:
+        with self.store.connect() as conn:
+            rows = conn.execute(
+                "SELECT action, detail, created_at FROM activity_logs ORDER BY id DESC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        return [
+            {
+                "time": row["created_at"],
+                "source": "mock",
+                "level": "info",
+                "message": f"{row['action']}: {row['detail']}",
+            }
+            for row in reversed(rows)
+        ]
+
     def start_install_process(self, payload: Dict[str, Any]):
         raise RuntimeError("mock mode does not use subprocess install")
 
@@ -93,7 +115,8 @@ class MockAdapter(BaseAdapter):
             self.store.log(conn, "install", f"Installed {protocol} on port {port} in mock mode")
         return {"ok": True, "message": f"{protocol} 已加入本地面板数据"}
 
-    def uninstall_protocol(self, protocol_id: int) -> Dict[str, Any]:
+    def uninstall_protocol(self, protocol_id: Any) -> Dict[str, Any]:
+        protocol_id = int(protocol_id)
         with self.store.connect() as conn:
             row = conn.execute("SELECT name, port FROM protocols WHERE id = ?", (protocol_id,)).fetchone()
             if not row:
@@ -104,16 +127,39 @@ class MockAdapter(BaseAdapter):
 
     def list_core_versions(self) -> List[Dict[str, Any]]:
         with self.store.connect() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM core_versions ORDER BY name").fetchall()]
+            rows = [dict(row) for row in conn.execute("SELECT * FROM core_versions ORDER BY name").fetchall()]
+        for row in rows:
+            current = str(row.get("current_version", "unknown")).lstrip("v")
+            stable = str(row.get("latest_version", "unknown")).lstrip("v")
+            beta = stable if row["name"] == "Snell v5" else f"{stable}-beta.1" if stable not in ("unknown", "获取中...") else stable
+            row["stable_version"] = stable
+            row["beta_version"] = beta
+            row["latest_version"] = stable
+            row["channel"] = row.get("channel") or "stable"
+            row["needs_update"] = int(current != stable and stable not in ("unknown", "获取中..."))
+        return rows
 
-    def update_core(self, name: str, target_version: str) -> Dict[str, Any]:
+    def update_core(self, name: str, target_version: str, channel: str = "stable") -> Dict[str, Any]:
         with self.store.connect() as conn:
             conn.execute(
-                "UPDATE core_versions SET current_version = ?, latest_version = ?, needs_update = 0 WHERE name = ?",
-                (target_version, target_version, name),
+                "UPDATE core_versions SET current_version = ?, latest_version = ?, channel = ?, needs_update = 0 WHERE name = ?",
+                (target_version, target_version, channel, name),
             )
-            self.store.log(conn, "core-update", f"Updated {name} to {target_version} in mock mode")
+            self.store.log(conn, "core-update", f"Updated {name} to {target_version} ({channel}) in mock mode")
         return {"ok": True, "message": f"{name} 已更新到 {target_version}"}
+
+    def uninstall_core(self, name: str) -> Dict[str, Any]:
+        with self.store.connect() as conn:
+            core_name = "Sing-box" if name == "Sing-box" else name
+            protocol_count = conn.execute("SELECT COUNT(*) FROM protocols WHERE core = ?", (core_name,)).fetchone()[0]
+            if protocol_count:
+                return {"ok": False, "message": f"{name} 仍有已安装协议，请先卸载协议"}
+            conn.execute(
+                "UPDATE core_versions SET current_version = '未安装', needs_update = 0 WHERE name = ?",
+                (name,),
+            )
+            self.store.log(conn, "core-uninstall", f"Uninstalled {name} in mock mode")
+        return {"ok": True, "message": f"{name} 已卸载"}
 
     def list_users(self) -> List[Dict[str, Any]]:
         with self.store.connect() as conn:
@@ -139,7 +185,8 @@ class MockAdapter(BaseAdapter):
             self.store.log(conn, "user-create", f"Created user {payload['username']} in mock mode")
         return {"ok": True, "message": "用户已创建"}
 
-    def delete_user(self, user_id: int) -> Dict[str, Any]:
+    def delete_user(self, user_id: Any) -> Dict[str, Any]:
+        user_id = int(user_id)
         with self.store.connect() as conn:
             row = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
             if not row:
@@ -179,7 +226,8 @@ class MockAdapter(BaseAdapter):
             self.store.log(conn, "subscription-update", f"Updated subscription {payload['id']} in mock mode")
         return {"ok": True, "message": "订阅设置已保存"}
 
-    def reset_subscription_uuid(self, sub_id: int) -> Dict[str, Any]:
+    def reset_subscription_uuid(self, sub_id: Any) -> Dict[str, Any]:
+        sub_id = int(sub_id)
         new_uuid = str(uuid.uuid4())
         with self.store.connect() as conn:
             conn.execute(
@@ -211,7 +259,8 @@ class MockAdapter(BaseAdapter):
             self.store.log(conn, "routing-add", f"Added route {payload['rule_type']}:{payload['target']} in mock mode")
         return {"ok": True, "message": "分流规则已添加"}
 
-    def delete_routing(self, rule_id: int) -> Dict[str, Any]:
+    def delete_routing(self, rule_id: Any) -> Dict[str, Any]:
+        rule_id = int(rule_id)
         with self.store.connect() as conn:
             conn.execute("DELETE FROM routing_rules WHERE id = ?", (rule_id,))
             self.store.log(conn, "routing-delete", f"Deleted route {rule_id} in mock mode")
@@ -265,6 +314,43 @@ class LiveAdapter(BaseAdapter):
     def reload_services(self) -> None:
         self._run("reload-services")
 
+    def read_logs(self, limit: int = 120) -> List[Dict[str, Any]]:
+        service_name = os.environ.get("PANEL_SERVICE", "vless-allin-one")
+        services = [service_name, "vless-reality", "vless-singbox", "vless-snell-v5"]
+        args = ["journalctl", "--no-pager", "-n", str(int(limit)), "-o", "short-iso"]
+        for service in services:
+            args.extend(["-u", service])
+        proc = subprocess.run(
+            args,
+            cwd=self.root_dir,
+            env=os.environ.copy(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return [
+                {
+                    "time": "",
+                    "source": "system",
+                    "level": "error",
+                    "message": proc.stderr.strip() or "journalctl 日志读取失败",
+                }
+            ]
+
+        lines = []
+        for raw in (proc.stdout or "").splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            parts = line.split()
+            timestamp = " ".join(parts[:2]) if len(parts) >= 2 else ""
+            source = parts[2] if len(parts) >= 3 else "server"
+            message = " ".join(parts[4:]) if len(parts) >= 5 else line
+            level = "error" if "error" in line.lower() or "failed" in line.lower() else "info"
+            lines.append({"time": timestamp, "source": source, "level": level, "message": message})
+        return lines[-int(limit):]
+
     def meta(self) -> Dict[str, Any]:
         return {
             "mode": "live",
@@ -297,23 +383,26 @@ class LiveAdapter(BaseAdapter):
     def install_protocol(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return self._run("install", payload)
 
-    def uninstall_protocol(self, protocol_id: int) -> Dict[str, Any]:
+    def uninstall_protocol(self, protocol_id: Any) -> Dict[str, Any]:
         return self._run("uninstall", {"id": protocol_id})
 
-    def update_core(self, name: str, target_version: str) -> Dict[str, Any]:
-        return self._run("core-update", {"name": name, "target_version": target_version})
+    def update_core(self, name: str, target_version: str, channel: str = "stable") -> Dict[str, Any]:
+        return self._run("core-update", {"name": name, "target_version": target_version, "channel": channel})
+
+    def uninstall_core(self, name: str) -> Dict[str, Any]:
+        return self._run("core-uninstall", {"name": name})
 
     def create_user(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return self._run("user-create", payload)
 
-    def delete_user(self, user_id: int) -> Dict[str, Any]:
+    def delete_user(self, user_id: Any) -> Dict[str, Any]:
         return self._run("user-delete", {"id": user_id})
 
-    def reset_subscription_uuid(self, sub_id: int) -> Dict[str, Any]:
+    def reset_subscription_uuid(self, sub_id: Any) -> Dict[str, Any]:
         return self._run("subscription-reset", {"id": sub_id})
 
     def add_routing(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return self._run("routing-add", payload)
 
-    def delete_routing(self, rule_id: int) -> Dict[str, Any]:
+    def delete_routing(self, rule_id: Any) -> Dict[str, Any]:
         return self._run("routing-delete", {"id": rule_id})

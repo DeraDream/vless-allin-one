@@ -65,11 +65,14 @@ const state = {
   meta: null,
   protocols: [],
   cores: [],
+  coreChannels: {},
   users: [],
   subscriptions: [],
   routing: [],
   logs: [],
   activeTab: "form",
+  currentSection: "install",
+  serverLogs: [],
   installStatus: {
     running: false,
     state: "idle",
@@ -175,27 +178,7 @@ function logsForSection(sectionId) {
 }
 
 function renderSectionExecutionLogs() {
-  document.querySelectorAll(".section").forEach((section) => {
-    const container = section.querySelector(".section-log-list");
-    if (!container) return;
-
-    const logs = logsForSection(section.id);
-    container.innerHTML = logs.length
-      ? logs
-          .map(
-            (item) => `
-              <article class="section-log-item">
-                <div class="section-log-head">
-                  <strong>${escapeHtml(labelForAction(item.action))}</strong>
-                  <span>${escapeHtml(item.created_at?.replace("T", " ").slice(0, 16) || "--")}</span>
-                </div>
-                <p>${escapeHtml(item.detail)}</p>
-              </article>
-            `
-          )
-          .join("")
-      : `<p class="section-log-empty">\u5f53\u524d\u5206\u7c7b\u6682\u65e0\u6267\u884c\u8bb0\u5f55</p>`;
-  });
+  return;
 }
 
 function ensureInstallStatusCard() {
@@ -232,55 +215,111 @@ function ensureInstallStatusCard() {
   sidePanel.insertBefore(card, panelHead.nextSibling);
 }
 
+function ensureInstallProtocolList() {
+  if (document.getElementById("install-protocol-table-body")) return;
+  const installSection = document.getElementById("install");
+  const sectionLayout = installSection?.querySelector(".section-layout");
+  if (!installSection || !sectionLayout) return;
+
+  const block = document.createElement("div");
+  block.className = "mini-card install-list-card";
+  block.innerHTML = `
+    <div class="block-head">
+      <div>
+        <h4>\u5df2\u5b89\u88c5\u534f\u8bae</h4>
+        <p>\u8fd9\u91cc\u53ef\u4ee5\u76f4\u63a5\u67e5\u770b\u5df2\u5b89\u88c5\u534f\u8bae\u5e76\u5378\u8f7d\u3002</p>
+      </div>
+    </div>
+    <div class="table-shell">
+      <table>
+        <thead>
+          <tr>
+            <th>\u534f\u8bae</th>
+            <th>\u6838\u5fc3</th>
+            <th>\u7aef\u53e3</th>
+            <th>\u670d\u52a1</th>
+            <th>\u72b6\u6001</th>
+            <th>\u64cd\u4f5c</th>
+          </tr>
+        </thead>
+        <tbody id="install-protocol-table-body"></tbody>
+      </table>
+    </div>
+  `;
+
+  sectionLayout.insertBefore(block, sectionLayout.firstChild);
+}
+
+function ensureLogPanel() {
+  const sidePanel = document.querySelector(".panel.panel-side");
+  if (!sidePanel) return;
+
+  const timeline = sidePanel.querySelector(".timeline");
+  if (timeline) timeline.remove();
+  const divider = sidePanel.querySelector(".panel-divider");
+  if (divider) divider.remove();
+  const commandBox = sidePanel.querySelector(".command-box");
+  if (commandBox) commandBox.remove();
+
+  const headKicker = sidePanel.querySelector(".panel-head .panel-kicker");
+  const headTitle = sidePanel.querySelector(".panel-head h3");
+  if (headKicker) headKicker.textContent = "\u670d\u52a1\u5668\u65e5\u5fd7";
+  if (headTitle) headTitle.textContent = "\u5b9e\u65f6 SSH \u65e5\u5fd7";
+
+  if (document.getElementById("server-log-list")) return;
+
+  const box = document.createElement("section");
+  box.className = "server-log-box";
+  box.innerHTML = `
+    <div class="server-log-meta">
+      <span id="server-log-status">\u6b63\u5728\u540c\u6b65\u670d\u52a1\u5668\u65e5\u5fd7...</span>
+    </div>
+    <div class="server-log-list" id="server-log-list"></div>
+  `;
+  sidePanel.appendChild(box);
+}
+
+function applySectionLayout(sectionKey) {
+  const sidePanel = document.querySelector(".panel.panel-side");
+  const contentGrid = document.querySelector(".content-grid");
+  const installStatusCard = document.getElementById("install-status-card");
+  if (!sidePanel || !contentGrid) return;
+
+  const showSidePanel = sectionKey !== "routing";
+  sidePanel.hidden = !showSidePanel;
+  contentGrid.classList.toggle("single-column", !showSidePanel);
+  if (installStatusCard) {
+    installStatusCard.hidden = sectionKey !== "install";
+  }
+}
+
+function refineSections() {
+  const uninstallMenuItem = document.querySelector('.menu-item[data-section="uninstall"]');
+  if (uninstallMenuItem) {
+    uninstallMenuItem.hidden = true;
+  }
+  const uninstallSection = document.getElementById("uninstall");
+  if (uninstallSection) {
+    uninstallSection.hidden = true;
+  }
+
+  const usersSection = document.getElementById("users");
+  const usersCards = usersSection?.querySelector(".cards-3");
+  const usersTable = usersSection?.querySelector(".table-shell");
+  if (usersCards && usersTable && usersTable.nextElementSibling !== usersCards) {
+    usersSection.appendChild(usersCards);
+  }
+}
+
 function setActiveTab(tab) {
-  state.activeTab = tab;
-
-  segmentControl.querySelectorAll(".segment").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.tab === tab);
-  });
-
-  const visibleSection = document.querySelector(".section.is-visible");
-  if (!visibleSection) return;
-
-  visibleSection.querySelectorAll(".tab-panel").forEach((panel) => {
-    panel.hidden = panel.dataset.tabPanel !== tab;
-  });
+  state.activeTab = "form";
 }
 
 function setupSectionTabs() {
-  document.querySelectorAll(".section").forEach((section) => {
-    if (section.querySelector(".tab-panel")) return;
-
-    const children = Array.from(section.children);
-    const formPanel = document.createElement("div");
-    formPanel.className = "tab-panel";
-    formPanel.dataset.tabPanel = "form";
-    children.forEach((child) => formPanel.appendChild(child));
-
-    const logPanel = document.createElement("div");
-    logPanel.className = "tab-panel";
-    logPanel.dataset.tabPanel = "logs";
-    logPanel.hidden = true;
-    logPanel.innerHTML = `
-      <div class="mini-card">
-        <h4>\u6267\u884c\u8bb0\u5f55</h4>
-        <p>\u8fd9\u91cc\u4f1a\u663e\u793a\u5f53\u524d\u529f\u80fd\u5206\u7c7b\u6700\u8fd1\u7684\u64cd\u4f5c\u65e5\u5fd7\u3002</p>
-        <div class="section-log-list"></div>
-      </div>
-    `;
-
-    section.appendChild(formPanel);
-    section.appendChild(logPanel);
-  });
-
-  segmentControl.innerHTML = `
-    <button class="segment is-active" data-tab="form">\u8868\u5355</button>
-    <button class="segment" data-tab="logs">\u6267\u884c\u8bb0\u5f55</button>
-  `;
-
-  segmentControl.querySelectorAll(".segment").forEach((button) => {
-    button.addEventListener("click", () => setActiveTab(button.dataset.tab));
-  });
+  if (segmentControl) {
+    segmentControl.innerHTML = "";
+    segmentControl.hidden = true;
+  }
 }
 
 function localizeStaticText() {
@@ -288,16 +327,16 @@ function localizeStaticText() {
   document.querySelector(".brand-kicker").textContent = "\u514d\u767b\u5f55\u63a7\u5236\u53f0";
   document.querySelector(".brand h1").textContent = "VLESS \u670d\u52a1\u9762\u677f";
   document.querySelector(".sidebar-note").textContent =
-    "\u672c\u5730\u5efa\u8bae\u5148\u7528 Mock \u6a21\u5f0f\u8054\u8c03\u754c\u9762\u548c\u6d41\u7a0b\uff0c\u786e\u8ba4\u4ea4\u4e92\u6b63\u5e38\u540e\u518d\u5207\u5230 Linux VPS \u7684 Live \u6a21\u5f0f\u3002";
-  document.querySelector(".sidebar-footer strong").textContent = "\u672c\u5730\u8054\u8c03 / \u670d\u52a1\u5668\u90e8\u7f72";
+    "\u9762\u677f\u9ed8\u8ba4\u9762\u5411 Linux Live \u6a21\u5f0f\uff0c\u5b89\u88c5\u3001\u66f4\u65b0\u3001\u5378\u8f7d\u548c\u6392\u969c\u90fd\u4f1a\u76f4\u63a5\u8fde\u63a5\u771f\u5b9e\u670d\u52a1\u5668\u73af\u5883\u3002";
+  document.querySelector(".sidebar-footer strong").textContent = "Linux \u7ebf\u4e0a\u8fd0\u7ef4";
   document.querySelector(".status-card p").textContent = "\u5f53\u524d\u6a21\u5f0f";
   document.querySelector(".eyebrow").textContent = "\u591a\u534f\u8bae\u53ef\u89c6\u5316\u63a7\u5236\u9762\u677f";
   document.getElementById("refresh-all-btn").textContent = "\u540c\u6b65\u9762\u677f\u6570\u636e";
-  document.querySelector(".hero-tag").textContent = "Windows \u672c\u5730\u6d4b\u8bd5 + Linux \u6b63\u5f0f\u90e8\u7f72";
+  document.querySelector(".hero-tag").textContent = "Linux \u4e00\u952e\u5b89\u88c5 + \u7ebf\u4e0a\u8fd0\u7ef4";
   document.querySelector(".hero h3").textContent =
-    "\u628a\u811a\u672c\u80fd\u529b\u63a5\u6210\u53ef\u89c6\u5316\u9762\u677f\uff0c\u5148\u672c\u5730\u8dd1\u901a\uff0c\u518d\u56de\u5230\u670d\u52a1\u5668\u4e0a\u7ebf";
+    "\u628a\u811a\u672c\u80fd\u529b\u76f4\u63a5\u63a5\u6210 Linux \u7ebf\u4e0a\u8fd0\u7ef4\u9762\u677f\uff0c\u652f\u6301\u4e00\u952e\u5b89\u88c5\u548c\u5b9e\u65f6\u65e5\u5fd7\u6392\u969c";
   document.querySelector(".hero p:not(.hero-tag)").textContent =
-    "\u8fd9\u4e2a\u9762\u677f\u56f4\u7ed5\u5b89\u88c5\u3001\u6838\u5fc3\u66f4\u65b0\u3001\u5378\u8f7d\u3001\u7528\u6237\u3001\u8ba2\u9605\u548c\u5206\u6d41\u516d\u7c7b\u64cd\u4f5c\u7ec4\u7ec7\u3002Windows \u672c\u5730\u53ef\u7528 Mock \u6570\u636e\u76f4\u63a5\u6d4b\u8bd5 GUI\uff0cLinux \u670d\u52a1\u5668\u518d\u5207\u5230 Live \u6a21\u5f0f\u8fde\u63a5\u5b9e\u9645\u811a\u672c\u3002";
+    "\u8fd9\u4e2a\u9762\u677f\u56f4\u7ed5\u5b89\u88c5\u534f\u8bae\u3001\u6838\u5fc3\u7ba1\u7406\u3001\u7528\u6237\u3001\u8ba2\u9605\u548c\u5206\u6d41\u4e94\u7c7b\u64cd\u4f5c\u7ec4\u7ec7\uff0c\u9762\u5411 Linux Live \u6a21\u5f0f\u76f4\u63a5\u7ba1\u7406\u771f\u5b9e\u670d\u52a1\u5668\u811a\u672c\u73af\u5883\u3002";
 
   const heroLabels = document.querySelectorAll(".hero-stats span");
   heroLabels[0].textContent = "\u5df2\u5b89\u88c5\u534f\u8bae";
@@ -415,13 +454,9 @@ function localizeStaticText() {
   routingHeaders[4].textContent = "\u4f18\u5148\u7ea7";
   routingHeaders[5].textContent = "\u64cd\u4f5c";
 
-  document.querySelector(".panel.panel-side .panel-kicker").textContent = "\u5feb\u901f\u6982\u89c8";
-  document.querySelector(".panel.panel-side h3").textContent = "\u8fd0\u884c\u6982\u89c8";
-  const commandKicker = document.querySelector(".command-box .panel-kicker");
-  commandKicker.textContent = "\u540e\u7aef\u63a5\u53e3";
+  document.querySelector(".panel.panel-side .panel-kicker").textContent = "\u670d\u52a1\u5668\u65e5\u5fd7";
+  document.querySelector(".panel.panel-side h3").textContent = "\u5b9e\u65f6 SSH \u65e5\u5fd7";
   toastMessage.textContent = "\u9762\u677f\u5df2\u5c31\u7eea\uff0c\u7b49\u5f85\u52a0\u8f7d\u6570\u636e\u3002";
-  document.querySelector(".command-box p:last-child").textContent =
-    "\u5f53\u524d\u754c\u9762\u6309\u94ae\u90fd\u901a\u8fc7\u672c\u5730 API \u89e6\u53d1\uff0cWindows \u8054\u8c03\u7528 Mock \u6a21\u5f0f\uff0cLinux \u90e8\u7f72\u5207\u5230 Live \u6a21\u5f0f\u3002";
 }
 
 function installStateLabel(status) {
@@ -548,7 +583,13 @@ async function api(path, options = {}) {
 }
 
 function notify(message) {
-  toastMessage.textContent = message;
+  if (toastMessage) {
+    toastMessage.textContent = message;
+  }
+  const logStatus = document.getElementById("server-log-status");
+  if (logStatus) {
+    logStatus.textContent = message;
+  }
 }
 
 function badgeClass(status) {
@@ -560,6 +601,7 @@ function badgeClass(status) {
 function setActiveSection(key) {
   const current = sections[key];
   if (!current) return;
+  state.currentSection = key;
 
   menuItems.forEach((item) => {
     item.classList.toggle("is-active", item.dataset.section === key);
@@ -571,8 +613,11 @@ function setActiveSection(key) {
 
   pageTitle.textContent = current.title;
   sectionHeading.textContent = current.heading;
-  commandPreview.textContent = current.command;
+  if (commandPreview) {
+    commandPreview.textContent = current.command;
+  }
   setActiveTab(state.activeTab);
+  applySectionLayout(key);
 }
 
 function updateModeIndicator() {
@@ -593,27 +638,10 @@ function renderDashboard(data) {
   document.getElementById("stat-routing").textContent = `${data.stats.routes} \u6761\u89c4\u5219`;
   document.getElementById("stat-routing-sub").textContent = "\u5206\u6d41\u6570\u636e\u5df2\u63a5\u901a";
 
-  const timeline = document.getElementById("timeline-list");
-  timeline.innerHTML = data.logs.length
-    ? data.logs
-        .map(
-          (item) => `
-            <article>
-              <span class="timeline-time">${escapeHtml(item.created_at?.slice(11, 16) || "--:--")}</span>
-              <div>
-                <strong>${escapeHtml(item.action)}</strong>
-                <p>${escapeHtml(item.detail)}</p>
-              </div>
-            </article>
-          `
-        )
-        .join("")
-    : "<p>\u6682\u65e0\u65e5\u5fd7</p>";
 }
 
 function renderProtocols() {
-  const body = document.getElementById("protocol-table-body");
-  body.innerHTML = state.protocols
+  const markup = state.protocols
     .map(
       (item) => `
         <tr>
@@ -627,21 +655,55 @@ function renderProtocols() {
       `
     )
     .join("");
+
+  const installBody = document.getElementById("install-protocol-table-body");
+  if (installBody) installBody.innerHTML = markup;
+
+  const uninstallBody = document.getElementById("protocol-table-body");
+  if (uninstallBody) uninstallBody.innerHTML = markup;
+}
+
+function selectedCoreChannel(name, fallback = "stable") {
+  return state.coreChannels[name] || fallback || "stable";
+}
+
+function coreTargetVersion(item) {
+  const channel = selectedCoreChannel(item.name, item.channel);
+  if (channel === "beta") {
+    return item.beta_version || item.latest_version || "unknown";
+  }
+  return item.stable_version || item.latest_version || "unknown";
 }
 
 function renderCores() {
   const body = document.getElementById("core-table-body");
   body.innerHTML = state.cores
     .map(
-      (item) => `
+      (item) => {
+        const channel = selectedCoreChannel(item.name, item.channel);
+        const targetVersion = coreTargetVersion(item);
+        const currentVersion = item.current_version || "unknown";
+        const disableUpdate = !targetVersion || targetVersion === "unknown" || currentVersion === targetVersion;
+        return `
         <tr>
           <td>${escapeHtml(item.name)}</td>
-          <td>${escapeHtml(item.current_version)}</td>
-          <td>${escapeHtml(item.latest_version)}</td>
-          <td>${escapeHtml(textOfCoreChannel(item.channel))}</td>
-          <td><button class="link-btn" data-core-name="${escapeHtml(item.name)}" data-core-target="${escapeHtml(item.latest_version)}">\u66f4\u65b0</button></td>
+          <td>${escapeHtml(currentVersion)}</td>
+          <td>${escapeHtml(targetVersion)}</td>
+          <td>
+            <select class="core-channel-select" data-core-channel-name="${escapeHtml(item.name)}">
+              <option value="stable" ${channel === "stable" ? "selected" : ""}>\u7a33\u5b9a\u6b63\u5f0f\u7248</option>
+              <option value="beta" ${channel === "beta" ? "selected" : ""} ${item.name === "Snell v5" ? "disabled" : ""}>\u6d4b\u8bd5\u7248</option>
+            </select>
+          </td>
+          <td>
+            <div class="row-actions">
+              <button class="link-btn" data-core-update-name="${escapeHtml(item.name)}" data-core-update-target="${escapeHtml(targetVersion)}" ${disableUpdate ? "disabled" : ""}>\u66f4\u65b0</button>
+              <button class="danger-btn" data-core-uninstall-name="${escapeHtml(item.name)}">\u5378\u8f7d</button>
+            </div>
+          </td>
         </tr>
-      `
+      `;
+      }
     )
     .join("");
 }
@@ -717,6 +779,9 @@ async function refreshAll() {
   state.meta = meta;
   state.protocols = protocols;
   state.cores = cores;
+  state.coreChannels = Object.fromEntries(
+    cores.map((item) => [item.name, state.coreChannels[item.name] || item.channel || "stable"])
+  );
   state.users = users;
   state.subscriptions = subscriptions;
   state.routing = routing;
@@ -803,6 +868,53 @@ function startInstallPolling() {
       notify(`\u5b89\u88c5\u72b6\u6001\u8f6e\u8be2\u5931\u8d25\uff1a${error.message}`);
     }
   }, 1000);
+}
+
+function renderServerLogs(payload) {
+  const logList = document.getElementById("server-log-list");
+  const status = document.getElementById("server-log-status");
+  if (!logList || !status) return;
+
+  const lines = Array.isArray(payload?.lines) ? payload.lines : [];
+  const shouldStick = logList.scrollTop + logList.clientHeight >= logList.scrollHeight - 40;
+  status.textContent = lines.length
+    ? `\u5df2\u52a0\u8f7d ${lines.length} \u6761\u670d\u52a1\u5668\u65e5\u5fd7`
+    : "\u6682\u672a\u8bfb\u5230\u670d\u52a1\u5668\u65e5\u5fd7";
+  logList.innerHTML = lines.length
+    ? lines
+        .map(
+          (item) => `
+            <article class="server-log-line ${item.level === "error" ? "is-error" : ""}">
+              <span class="server-log-time">${escapeHtml(item.time || "--")}</span>
+              <strong class="server-log-source">${escapeHtml(item.source || "server")}</strong>
+              <p>${escapeHtml(item.message || "")}</p>
+            </article>
+          `
+        )
+        .join("")
+    : `<p class="server-log-empty">\u6682\u65e0\u670d\u52a1\u5668\u65e5\u5fd7</p>`;
+
+  if (shouldStick) {
+    logList.scrollTop = logList.scrollHeight;
+  }
+}
+
+async function fetchServerLogs() {
+  const result = await api("/api/logs?limit=120");
+  state.serverLogs = result.lines || [];
+  renderServerLogs(result);
+}
+
+function startServerLogPolling() {
+  window.setInterval(async () => {
+    if (state.currentSection === "routing") return;
+    try {
+      await fetchServerLogs();
+    } catch (error) {
+      const status = document.getElementById("server-log-status");
+      if (status) status.textContent = `\u65e5\u5fd7\u8bfb\u53d6\u5931\u8d25\uff1a${error.message}`;
+    }
+  }, 2000);
 }
 
 async function fetchInstallStatus() {
@@ -932,8 +1044,9 @@ async function saveSubscription() {
 
 document.addEventListener("click", async (event) => {
   const uninstallId = event.target.dataset.uninstallId;
-  const coreName = event.target.dataset.coreName;
-  const coreTarget = event.target.dataset.coreTarget;
+  const coreUpdateName = event.target.dataset.coreUpdateName;
+  const coreUpdateTarget = event.target.dataset.coreUpdateTarget;
+  const coreUninstallName = event.target.dataset.coreUninstallName;
   const userDeleteId = event.target.dataset.userDeleteId;
   const routingDeleteId = event.target.dataset.routingDeleteId;
 
@@ -945,10 +1058,18 @@ document.addEventListener("click", async (event) => {
       });
       notify(result.message);
       await refreshAll();
-    } else if (coreName) {
+    } else if (coreUpdateName) {
+      const channel = selectedCoreChannel(coreUpdateName, "stable");
       const result = await api("/api/core/update", {
         method: "POST",
-        body: JSON.stringify({ name: coreName, target_version: coreTarget }),
+        body: JSON.stringify({ name: coreUpdateName, target_version: coreUpdateTarget, channel }),
+      });
+      notify(result.message);
+      await refreshAll();
+    } else if (coreUninstallName) {
+      const result = await api("/api/core/uninstall", {
+        method: "POST",
+        body: JSON.stringify({ name: coreUninstallName }),
       });
       notify(result.message);
       await refreshAll();
@@ -984,6 +1105,12 @@ document.getElementById("install-port-random-btn").addEventListener("click", () 
 document.getElementById("install-short-id-random-btn").addEventListener("click", () => {
   if (!document.getElementById("install-short-id").disabled) {
     document.getElementById("install-short-id").value = randomShortId();
+  }
+});
+document.addEventListener("change", (event) => {
+  if (event.target.matches(".core-channel-select")) {
+    state.coreChannels[event.target.dataset.coreChannelName] = event.target.value;
+    renderCores();
   }
 });
 
@@ -1043,13 +1170,18 @@ document.getElementById("routing-add-btn").addEventListener("click", async () =>
 async function init() {
   localizeStaticText();
   setupSectionTabs();
+  ensureInstallProtocolList();
+  ensureLogPanel();
   ensureInstallStatusCard();
+  refineSections();
   setActiveSection("install");
   syncInstallDefaults();
   renderInstallStatus(state.installStatus);
   try {
     await refreshAll();
     await fetchInstallStatus();
+    await fetchServerLogs();
+    startServerLogPolling();
   } catch (error) {
     notify(`\u521d\u59cb\u5316\u5931\u8d25\uff1a${error.message}`);
     modeIndicatorBtn.textContent = "\u63a5\u53e3\u5f02\u5e38";

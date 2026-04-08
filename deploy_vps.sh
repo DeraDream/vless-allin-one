@@ -7,7 +7,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 TARGET="$1"
-TARGET_DIR="${2:-/opt/vless-server-panel}"
+TARGET_DIR="${2:-/opt/vless-allin-one}"
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 tar czf /tmp/vless-server-panel.tar.gz \
