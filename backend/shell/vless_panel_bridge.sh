@@ -416,6 +416,7 @@ panel_delete_user() {
     json_fail "用户删除失败"
     exit 1
   }
+  panel_reload_core "$core"
   json_ok "用户 $username 已从脚本数据库删除"
 }
 

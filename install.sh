@@ -155,7 +155,7 @@ prepare_runtime() {
 }
 
 write_cli() {
-  log "Writing CLI launcher: /usr/local/bin/vless"
+  log "写入命令行菜单: /usr/local/bin/vless"
   cat >"/usr/local/bin/vless" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -163,20 +163,25 @@ set -euo pipefail
 APP_DIR="${INSTALL_DIR}"
 PANEL_SERVICE="${SERVICE_NAME}"
 
+kill_panel_processes() {
+  pkill -f "\$APP_DIR.*backend\\.server" 2>/dev/null || true
+  pkill -f "python3 -m backend.server" 2>/dev/null || true
+}
+
 show_menu() {
   echo ""
-  echo "VLESS control menu"
-  echo "1. Open script main menu"
-  echo "2. Show panel status"
-  echo "3. Restart panel"
-  echo "4. Stop panel"
-  echo "5. Start panel"
-  echo "6. Show live logs"
-  echo "7. Update project"
-  echo "8. Uninstall panel"
-  echo "0. Exit"
+  echo "VLESS 管理菜单"
+  echo "1. 打开脚本主菜单"
+  echo "2. 查看面板状态"
+  echo "3. 重启面板"
+  echo "4. 停止面板"
+  echo "5. 启动面板"
+  echo "6. 查看实时日志"
+  echo "7. 更新项目"
+  echo "8. 彻底卸载面板"
+  echo "0. 退出"
   echo ""
-  read -rp "Select: " choice
+  read -rp "请选择: " choice
   case "\$choice" in
     1) bash "\$APP_DIR/vless-server.sh" ;;
     2) systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
@@ -186,18 +191,19 @@ show_menu() {
     6) journalctl -u "\$PANEL_SERVICE" -f ;;
     7) git -C "\$APP_DIR" fetch --all --tags && git -C "\$APP_DIR" pull --ff-only && systemctl restart "\$PANEL_SERVICE" ;;
     8)
-      read -rp "Confirm uninstall panel and launcher? [y/N]: " confirm
+      read -rp "确认彻底卸载面板和命令菜单？[y/N]: " confirm
       [[ "\$confirm" =~ ^[yY]$ ]] || exit 0
       systemctl stop "\$PANEL_SERVICE" 2>/dev/null || true
       systemctl disable "\$PANEL_SERVICE" 2>/dev/null || true
+      kill_panel_processes
       rm -f "/etc/systemd/system/\${PANEL_SERVICE}.service"
       systemctl daemon-reload 2>/dev/null || true
       rm -f /usr/local/bin/vless
       rm -rf "\$APP_DIR"
-      echo "Panel removed"
+      echo "面板已彻底卸载"
       ;;
     0) exit 0 ;;
-    *) echo "Invalid choice"; exit 1 ;;
+    *) echo "无效选择"; exit 1 ;;
   esac
 }
 
@@ -206,20 +212,21 @@ case "\${1:-menu}" in
   script) bash "\$APP_DIR/vless-server.sh" ;;
   status) systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
   restart) systemctl restart "\$PANEL_SERVICE" ;;
-  stop) systemctl stop "\$PANEL_SERVICE" ;;
+  stop) systemctl stop "\$PANEL_SERVICE" && kill_panel_processes ;;
   start) systemctl start "\$PANEL_SERVICE" ;;
   logs) journalctl -u "\$PANEL_SERVICE" -f ;;
   update) git -C "\$APP_DIR" fetch --all --tags && git -C "\$APP_DIR" pull --ff-only && systemctl restart "\$PANEL_SERVICE" ;;
   uninstall)
     systemctl stop "\$PANEL_SERVICE" 2>/dev/null || true
     systemctl disable "\$PANEL_SERVICE" 2>/dev/null || true
+    kill_panel_processes
     rm -f "/etc/systemd/system/\${PANEL_SERVICE}.service"
     systemctl daemon-reload 2>/dev/null || true
     rm -f /usr/local/bin/vless
     rm -rf "\$APP_DIR"
     ;;
   *)
-    echo "Usage: vless [menu|script|status|restart|stop|start|logs|update|uninstall]"
+    echo "用法: vless [menu|script|status|restart|stop|start|logs|update|uninstall]"
     exit 1
     ;;
 esac

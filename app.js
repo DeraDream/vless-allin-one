@@ -1043,21 +1043,26 @@ async function saveSubscription() {
 }
 
 document.addEventListener("click", async (event) => {
-  const uninstallId = event.target.dataset.uninstallId;
-  const coreUpdateName = event.target.dataset.coreUpdateName;
-  const coreUpdateTarget = event.target.dataset.coreUpdateTarget;
-  const coreUninstallName = event.target.dataset.coreUninstallName;
-  const userDeleteId = event.target.dataset.userDeleteId;
-  const routingDeleteId = event.target.dataset.routingDeleteId;
+  const trigger = event.target.closest("button");
+  if (!trigger) return;
+
+  const uninstallId = trigger.dataset.uninstallId;
+  const coreUpdateName = trigger.dataset.coreUpdateName;
+  const coreUpdateTarget = trigger.dataset.coreUpdateTarget;
+  const coreUninstallName = trigger.dataset.coreUninstallName;
+  const userDeleteId = trigger.dataset.userDeleteId;
+  const routingDeleteId = trigger.dataset.routingDeleteId;
 
   try {
     if (uninstallId) {
+      if (!window.confirm("\u786e\u8ba4\u5378\u8f7d\u8fd9\u4e2a\u534f\u8bae\u5417\uff1f")) return;
       const result = await api("/api/uninstall", {
         method: "POST",
         body: JSON.stringify({ id: uninstallId }),
       });
       notify(result.message);
       await refreshAll();
+      await fetchServerLogs();
     } else if (coreUpdateName) {
       const channel = selectedCoreChannel(coreUpdateName, "stable");
       const result = await api("/api/core/update", {
@@ -1066,27 +1071,34 @@ document.addEventListener("click", async (event) => {
       });
       notify(result.message);
       await refreshAll();
+      await fetchServerLogs();
     } else if (coreUninstallName) {
+      if (!window.confirm(`\u786e\u8ba4\u5378\u8f7d ${coreUninstallName} \u5417\uff1f`)) return;
       const result = await api("/api/core/uninstall", {
         method: "POST",
         body: JSON.stringify({ name: coreUninstallName }),
       });
       notify(result.message);
       await refreshAll();
+      await fetchServerLogs();
     } else if (userDeleteId) {
+      if (!window.confirm("\u786e\u8ba4\u5220\u9664\u8fd9\u4e2a\u7528\u6237\u5417\uff1f")) return;
       const result = await api("/api/users", {
         method: "DELETE",
         body: JSON.stringify({ id: userDeleteId }),
       });
       notify(result.message);
       await refreshAll();
+      await fetchServerLogs();
     } else if (routingDeleteId) {
+      if (!window.confirm("\u786e\u8ba4\u5220\u9664\u8fd9\u6761\u5206\u6d41\u89c4\u5219\u5417\uff1f")) return;
       const result = await api("/api/routing", {
         method: "DELETE",
         body: JSON.stringify({ id: routingDeleteId }),
       });
       notify(result.message);
       await refreshAll();
+      await fetchServerLogs();
     }
   } catch (error) {
     notify(error.message);
