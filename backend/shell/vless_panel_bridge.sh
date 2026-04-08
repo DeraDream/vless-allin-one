@@ -40,6 +40,23 @@ progress_emit() {
   printf '__PROGRESS__:%s\n' "$message" >&2
 }
 
+reality_keys_generate() {
+  xray x25519 2>&1
+}
+
+reality_key_extract() {
+  local label="$1"
+  local content="$2"
+  printf '%s\n' "$content" \
+    | tr -d '\r' \
+    | awk -F': *' -v target="$label" '
+        tolower($1) ~ target {
+          print $2
+          exit
+        }
+      '
+}
+
 payload_get() {
   local key="$1"
   payload_validate || { json_fail "安装参数解析失败"; exit 1; }
@@ -160,10 +177,10 @@ panel_install_protocol() {
       sid="${short_id:-$(gen_sid)}"
       sni="${server_name:-${domain:-$(gen_sni)}}"
       progress_emit "生成 Reality 密钥"
-      keys="$(xray x25519 2>/dev/null)"
-      privkey="$(echo "$keys" | awk '/PrivateKey:/ {print $2}')"
-      pubkey="$(echo "$keys" | awk '/PublicKey:/ {print $2}')"
-      [[ -z "$pubkey" ]] && pubkey="$(echo "$keys" | awk '/Password:/ {print $2}')"
+      keys="$(reality_keys_generate)"
+      privkey="$(reality_key_extract 'private[ _-]*key' "$keys")"
+      pubkey="$(reality_key_extract 'public[ _-]*key' "$keys")"
+      [[ -z "$pubkey" ]] && pubkey="$(reality_key_extract 'password' "$keys")"
       [[ -z "$privkey" || -z "$pubkey" ]] && { json_fail "Reality 密钥生成失败"; exit 1; }
       progress_emit "写入 VLESS Reality 配置"
       gen_server_config "$uuid" "$port" "$privkey" "$pubkey" "$sid" "$sni" >/dev/null 2>&1
@@ -182,10 +199,10 @@ panel_install_protocol() {
       path="/xhttp"
       sni="${server_name:-${domain:-$(gen_sni)}}"
       progress_emit "生成 XHTTP Reality 密钥"
-      keys="$(xray x25519 2>/dev/null)"
-      privkey="$(echo "$keys" | awk '/PrivateKey:/ {print $2}')"
-      pubkey="$(echo "$keys" | awk '/PublicKey:/ {print $2}')"
-      [[ -z "$pubkey" ]] && pubkey="$(echo "$keys" | awk '/Password:/ {print $2}')"
+      keys="$(reality_keys_generate)"
+      privkey="$(reality_key_extract 'private[ _-]*key' "$keys")"
+      pubkey="$(reality_key_extract 'public[ _-]*key' "$keys")"
+      [[ -z "$pubkey" ]] && pubkey="$(reality_key_extract 'password' "$keys")"
       [[ -z "$privkey" || -z "$pubkey" ]] && { json_fail "XHTTP Reality 密钥生成失败"; exit 1; }
       progress_emit "写入 VLESS-XHTTP 配置"
       gen_vless_xhttp_server_config "$uuid" "$port" "$privkey" "$pubkey" "$sid" "$sni" "$path" >/dev/null 2>&1
