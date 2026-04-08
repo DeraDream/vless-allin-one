@@ -183,11 +183,11 @@ panel_install_protocol() {
       [[ -z "$pubkey" ]] && pubkey="$(reality_key_extract 'password' "$keys")"
       [[ -z "$privkey" || -z "$pubkey" ]] && { json_fail "Reality 密钥生成失败"; exit 1; }
       progress_emit "写入 VLESS Reality 配置"
-      gen_server_config "$uuid" "$port" "$privkey" "$pubkey" "$sid" "$sni" >/dev/null 2>&1
+      gen_server_config "$uuid" "$port" "$privkey" "$pubkey" "$sid" "$sni" || { json_fail "写入 VLESS Reality 配置失败"; exit 1; }
       progress_emit "创建服务并启动"
-      create_server_scripts >/dev/null 2>&1 || true
-      create_service "$protocol" >/dev/null 2>&1 || true
-      panel_reload_core "xray"
+      create_server_scripts || { json_fail "创建服务脚本失败"; exit 1; }
+      create_service "$protocol" || { json_fail "创建服务失败"; exit 1; }
+      panel_reload_core "xray" || { json_fail "重载 Xray 服务失败"; exit 1; }
       json_ok "VLESS 已安装并写入脚本数据库"
       ;;
     vless-xhttp)
@@ -205,11 +205,11 @@ panel_install_protocol() {
       [[ -z "$pubkey" ]] && pubkey="$(reality_key_extract 'password' "$keys")"
       [[ -z "$privkey" || -z "$pubkey" ]] && { json_fail "XHTTP Reality 密钥生成失败"; exit 1; }
       progress_emit "写入 VLESS-XHTTP 配置"
-      gen_vless_xhttp_server_config "$uuid" "$port" "$privkey" "$pubkey" "$sid" "$sni" "$path" >/dev/null 2>&1
+      gen_vless_xhttp_server_config "$uuid" "$port" "$privkey" "$pubkey" "$sid" "$sni" "$path" || { json_fail "写入 VLESS-XHTTP 配置失败"; exit 1; }
       progress_emit "创建服务并启动"
-      create_server_scripts >/dev/null 2>&1 || true
-      create_service "$protocol" >/dev/null 2>&1 || true
-      panel_reload_core "xray"
+      create_server_scripts || { json_fail "创建服务脚本失败"; exit 1; }
+      create_service "$protocol" || { json_fail "创建服务失败"; exit 1; }
+      panel_reload_core "xray" || { json_fail "重载 Xray 服务失败"; exit 1; }
       json_ok "VLESS-XHTTP 已安装并写入脚本数据库"
       ;;
     trojan)
