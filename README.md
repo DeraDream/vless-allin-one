@@ -57,3 +57,43 @@ PANEL_MODE=live PANEL_CFG=/etc/vless-reality ./run_local.sh
 chmod +x deploy_vps.sh
 ./deploy_vps.sh root@your-vps /opt/vless-server-panel
 ```
+
+## 一键安装到 Linux VPS
+
+如果仓库已经推到 GitHub，可以直接在 VPS 上执行：
+
+```bash
+wget -O install.sh https://raw.githubusercontent.com/DeraDream/vless-allin-one/main/install.sh && chmod +x install.sh && ./install.sh
+```
+
+或者：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DeraDream/vless-allin-one/main/install.sh -o install.sh && chmod +x install.sh && ./install.sh
+```
+
+默认安装行为：
+
+- 拉取仓库到 `/opt/vless-allin-one`
+- 使用 `systemd` 注册服务 `vless-allin-one`
+- 以 `live` 模式启动面板
+- 默认监听 `0.0.0.0:8765`
+
+可选环境变量：
+
+```bash
+INSTALL_DIR=/opt/vless-allin-one \
+SERVICE_NAME=vless-allin-one \
+PANEL_PORT=8765 \
+PANEL_HOST=0.0.0.0 \
+PANEL_MODE=live \
+PANEL_CFG=/etc/vless-reality \
+REPO_BRANCH=main \
+bash install.sh
+```
+
+## VPS 更新
+
+```bash
+wget -O update.sh https://raw.githubusercontent.com/DeraDream/vless-allin-one/main/update.sh && chmod +x update.sh && ./update.sh
+```
