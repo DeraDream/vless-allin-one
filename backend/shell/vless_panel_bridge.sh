@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_PATH="$ROOT_DIR/vless-server.sh"
@@ -73,14 +74,14 @@ ensure_base_dependencies() {
 }
 
 ensure_xray_ready() {
-  if ! command -v xray >/dev/null 2>&1; then
+  if ! command -v xray >/dev/null 2>&1 && [[ ! -x /usr/local/bin/xray ]] && [[ ! -x /usr/bin/xray ]]; then
     check_dependencies >/dev/null 2>&1 || true
     install_xray >/dev/null 2>&1 || { json_fail "Xray 安装失败"; exit 1; }
   fi
 }
 
 ensure_singbox_ready() {
-  if ! command -v sing-box >/dev/null 2>&1; then
+  if ! command -v sing-box >/dev/null 2>&1 && [[ ! -x /usr/local/bin/sing-box ]] && [[ ! -x /usr/bin/sing-box ]]; then
     check_dependencies >/dev/null 2>&1 || true
     install_singbox >/dev/null 2>&1 || { json_fail "Sing-box 安装失败"; exit 1; }
   fi
