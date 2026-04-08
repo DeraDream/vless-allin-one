@@ -24,6 +24,8 @@ readonly SCRIPT_REPO="chil30-group/vless-all-in-one"
 readonly SCRIPT_RAW_URL="https://gitlab.com/chil30-group/vless-all-in-one/-/raw/main/vless-server.sh"
 readonly CFG="${VLESS_CFG:-/etc/vless-reality}"
 readonly ACME_DEFAULT_EMAIL="acme@vaio.com"
+INSTALL_MODE="${INSTALL_MODE:-}"
+REPLACE_PORT="${REPLACE_PORT:-}"
 
 # curl 超时常量
 readonly CURL_TIMEOUT_FAST=5
