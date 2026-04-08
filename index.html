@@ -38,29 +38,22 @@
               <small>Xray / Sing-box / Snell</small>
             </span>
           </button>
-          <button class="menu-item" data-section="uninstall">
-            <span class="menu-index">03</span>
-            <span>
-              <strong>卸载协议</strong>
-              <small>按协议与端口移除实例</small>
-            </span>
-          </button>
           <button class="menu-item" data-section="users">
-            <span class="menu-index">04</span>
+            <span class="menu-index">03</span>
             <span>
               <strong>用户管理</strong>
               <small>流量 / 配额 / 到期时间</small>
             </span>
           </button>
           <button class="menu-item" data-section="subscription">
-            <span class="menu-index">05</span>
+            <span class="menu-index">04</span>
             <span>
               <strong>订阅服务</strong>
               <small>V2Ray / Clash / Surge</small>
             </span>
           </button>
           <button class="menu-item" data-section="routing">
-            <span class="menu-index">06</span>
+            <span class="menu-index">05</span>
             <span>
               <strong>分流管理</strong>
               <small>WARP / Chain / Balancer</small>
@@ -231,29 +224,6 @@ Remark: install from panel</textarea>
               </div>
             </section>
 
-            <section class="section" id="uninstall">
-              <div class="table-shell">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>协议</th>
-                      <th>核心</th>
-                      <th>端口</th>
-                      <th>服务</th>
-                      <th>状态</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody id="protocol-table-body"></tbody>
-                </table>
-              </div>
-
-              <div class="warning-box">
-                <strong>注意</strong>
-                <p>本地 Mock 模式会修改 `runtime/panel.db`，Linux Live 模式则会实际改动服务器脚本数据。</p>
-              </div>
-            </section>
-
             <section class="section" id="users">
               <div class="cards-3">
                 <article class="metric-card">
@@ -295,6 +265,13 @@ Remark: install from panel</textarea>
                   <input type="date" id="user-expire" value="2026-04-20" />
                 </label>
                 <label>
+                  用户路由
+                  <select id="user-routing">
+                    <option value="">全局规则</option>
+                    <option value="direct">直连</option>
+                  </select>
+                </label>
+                <label>
                   状态
                   <select id="user-status">
                     <option value="enabled">enabled</option>
@@ -314,6 +291,7 @@ Remark: install from panel</textarea>
                       <th>用户名</th>
                       <th>协议</th>
                       <th>端口</th>
+                      <th>用户路由</th>
                       <th>已用流量</th>
                       <th>配额</th>
                       <th>到期时间</th>

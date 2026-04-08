@@ -448,13 +448,14 @@ panel_uninstall_core() {
 }
 
 panel_create_user() {
-  local username protocol port quota expire status core credential quota_int
+  local username protocol port quota expire status routing core credential quota_int
   username="$(payload_get username)"
   protocol="$(payload_get protocol)"
   port="$(payload_get port)"
   quota="$(payload_get quota_gb)"
   expire="$(payload_get expire_at)"
   status="$(payload_get status)"
+  routing="$(payload_get routing)"
   core="$(panel_protocol_core "$protocol")"
   quota_int="${quota%.*}"
   [[ -z "$quota_int" ]] && quota_int=0
@@ -485,12 +486,31 @@ panel_create_user() {
     exit 1
   }
 
+  if [[ -n "$routing" && "$routing" != "default" ]]; then
+    if [[ "$routing" == chain:* ]]; then
+      local chain_name
+      chain_name="${routing#chain:}"
+      db_chain_node_exists "$chain_name" || {
+        db_del_user "$core" "$protocol" "$username" >/dev/null 2>&1 || true
+        json_fail "指定的链式节点不存在"
+        exit 1
+      }
+    fi
+    db_set_user_routing "$core" "$protocol" "$username" "$routing" >/dev/null 2>&1 || {
+      db_del_user "$core" "$protocol" "$username" >/dev/null 2>&1 || true
+      json_fail "用户路由写入失败"
+      exit 1
+    }
+  fi
+
   if [[ "$status" == "disabled" ]]; then
     db_set_user_enabled "$core" "$protocol" "$username" false >/dev/null 2>&1 || true
   fi
   if [[ -n "$port" ]]; then
     :
   fi
+
+  panel_reload_core "$core"
 
   json_ok "用户 $username 已写入脚本数据库"
 }
@@ -719,6 +739,7 @@ emit_users() {
             username: .name,
             protocol: $proto,
             port: $port,
+            routing: (.routing // ""),
             used_gb: (((.used // 0) / 1073741824) * 10 | round / 10),
             quota_gb: (((.quota // 0) / 1073741824) * 10 | round / 10),
             expire_at: (.expire_date // ""),
@@ -730,6 +751,7 @@ emit_users() {
             username: .name,
             protocol: $proto,
             port: $port,
+            routing: (.routing // ""),
             used_gb: (((.used // 0) / 1073741824) * 10 | round / 10),
             quota_gb: (((.quota // 0) / 1073741824) * 10 | round / 10),
             expire_at: (.expire_date // ""),
@@ -744,6 +766,7 @@ emit_users() {
             username: .name,
             protocol: $proto,
             port: $port,
+            routing: (.routing // ""),
             used_gb: (((.used // 0) / 1073741824) * 10 | round / 10),
             quota_gb: (((.quota // 0) / 1073741824) * 10 | round / 10),
             expire_at: (.expire_date // ""),
@@ -755,6 +778,7 @@ emit_users() {
             username: .name,
             protocol: $proto,
             port: $port,
+            routing: (.routing // ""),
             used_gb: (((.used // 0) / 1073741824) * 10 | round / 10),
             quota_gb: (((.quota // 0) / 1073741824) * 10 | round / 10),
             expire_at: (.expire_date // ""),
@@ -763,7 +787,25 @@ emit_users() {
         end
       )
     ] | flatten
+    | map(. + {
+        routing_label: (
+          if (.routing // "") == "" or (.routing // "") == "default" then "全局规则"
+          elif (.routing // "") == "direct" then "直连"
+          elif (.routing | startswith("chain:")) then ("链式: " + (.routing | ltrimstr("chain:")))
+          elif (.routing | startswith("balancer:")) then ("负载均衡: " + (.routing | ltrimstr("balancer:")))
+          elif (.routing // "") == "warp" then "WARP"
+          else (.routing // "")
+          end
+        )
+      })
   ' "$DB_FILE"
+}
+
+emit_user_routing_options() {
+  jq -n --argjson nodes "$(db_get_chain_nodes 2>/dev/null || echo '[]')" '
+    [{value:"",label:"全局规则"},{value:"direct",label:"直连"}]
+    + ($nodes | map({value: ("chain:" + .name), label: ("链式: " + .name)}))
+  '
 }
 
 emit_subscriptions() {
@@ -849,6 +891,7 @@ case "$command" in
   protocols) emit_protocols ;;
   cores) emit_cores ;;
   users) emit_users ;;
+  user-routing-options) emit_user_routing_options ;;
   subscriptions) emit_subscriptions ;;
   routing) emit_routing ;;
   install) panel_install_protocol ;;

@@ -1,7 +1,6 @@
 const sections = {
   install: { title: "\u5b89\u88c5\u534f\u8bae", heading: "\u5b89\u88c5\u534f\u8bae", command: "POST /api/install" },
   core: { title: "\u6838\u5fc3\u7248\u672c", heading: "\u6838\u5fc3\u7248\u672c", command: "GET /api/cores | POST /api/core/update" },
-  uninstall: { title: "\u5378\u8f7d\u534f\u8bae", heading: "\u5378\u8f7d\u534f\u8bae", command: "GET /api/protocols | POST /api/uninstall" },
   users: { title: "\u7528\u6237\u7ba1\u7406", heading: "\u7528\u6237\u7ba1\u7406", command: "GET /api/users | POST|DELETE /api/users" },
   subscription: { title: "\u8ba2\u9605\u670d\u52a1", heading: "\u8ba2\u9605\u670d\u52a1", command: "GET /api/subscriptions | POST /api/subscriptions/update" },
   routing: { title: "\u5206\u6d41\u89c4\u5219", heading: "\u5206\u6d41\u89c4\u5219", command: "GET /api/routing | POST|DELETE /api/routing" },
@@ -44,10 +43,6 @@ const sectionText = {
     menuTitle: "\u6838\u5fc3\u7248\u672c\u7ba1\u7406",
     menuSmall: "Xray / Sing-box / Snell",
   },
-  uninstall: {
-    menuTitle: "\u5378\u8f7d\u534f\u8bae",
-    menuSmall: "\u6309\u534f\u8bae\u4e0e\u7aef\u53e3\u79fb\u9664\u5b9e\u4f8b",
-  },
   users: {
     menuTitle: "\u7528\u6237\u7ba1\u7406",
     menuSmall: "\u6d41\u91cf / \u914d\u989d / \u5230\u671f\u65f6\u95f4",
@@ -70,6 +65,7 @@ const state = {
   users: [],
   subscriptions: [],
   routing: [],
+  userRoutingOptions: [],
   logs: [],
   activeTab: "form",
   currentSection: "install",
@@ -100,7 +96,6 @@ const segmentControl = document.querySelector(".segment-control");
 const sectionActionMap = {
   install: ["install"],
   core: ["core-update"],
-  uninstall: ["uninstall"],
   users: ["user-create", "user-delete"],
   subscription: ["subscription-update", "subscription-reset"],
   routing: ["routing-add", "routing-delete"],
@@ -155,6 +150,15 @@ function textOfCoreChannel(channel) {
   if (channel === "manual") return "\u624b\u52a8";
   if (channel === "live") return "\u5b9e\u65f6";
   return channel;
+}
+
+function formatUserRoutingLabel(value) {
+  if (!value || value === "default") return "\u5168\u5c40\u89c4\u5219";
+  if (value === "direct") return "\u76f4\u8fde";
+  if (value.startsWith("chain:")) return `\u94fe\u5f0f: ${value.slice(6)}`;
+  if (value.startsWith("balancer:")) return `\u8d1f\u8f7d\u5747\u8861: ${value.slice(9)}`;
+  if (value === "warp") return "WARP";
+  return value;
 }
 
 function labelForAction(action) {
@@ -295,15 +299,6 @@ function applySectionLayout(sectionKey) {
 }
 
 function refineSections() {
-  const uninstallMenuItem = document.querySelector('.menu-item[data-section="uninstall"]');
-  if (uninstallMenuItem) {
-    uninstallMenuItem.hidden = true;
-  }
-  const uninstallSection = document.getElementById("uninstall");
-  if (uninstallSection) {
-    uninstallSection.hidden = true;
-  }
-
   const usersSection = document.getElementById("users");
   const usersCards = usersSection?.querySelector(".cards-3");
   const usersTable = usersSection?.querySelector(".table-shell");
@@ -381,17 +376,6 @@ function localizeStaticText() {
   coreHeaders[3].textContent = "\u901a\u9053";
   coreHeaders[4].textContent = "\u64cd\u4f5c";
 
-  const uninstallHeaders = document.querySelectorAll("#uninstall th");
-  uninstallHeaders[0].textContent = "\u534f\u8bae";
-  uninstallHeaders[1].textContent = "\u6838\u5fc3";
-  uninstallHeaders[2].textContent = "\u7aef\u53e3";
-  uninstallHeaders[3].textContent = "\u670d\u52a1";
-  uninstallHeaders[4].textContent = "\u72b6\u6001";
-  uninstallHeaders[5].textContent = "\u64cd\u4f5c";
-  document.querySelector("#uninstall .warning-box strong").textContent = "\u6ce8\u610f";
-  document.querySelector("#uninstall .warning-box p").innerHTML =
-    "\u672c\u5730 Mock \u6a21\u5f0f\u4f1a\u4fee\u6539 <code>runtime/panel.db</code>\uff0cLinux Live \u6a21\u5f0f\u5219\u4f1a\u5b9e\u9645\u6539\u52a8\u670d\u52a1\u5668\u811a\u672c\u6570\u636e\u3002";
-
   const userCards = document.querySelectorAll("#users .metric-card span");
   userCards[0].textContent = "\u6d3b\u8dc3\u7528\u6237";
   userCards[1].textContent = "\u5f02\u5e38\u72b6\u6001";
@@ -406,7 +390,8 @@ function localizeStaticText() {
   userLabels[2].childNodes[0].textContent = "\u7aef\u53e3\n                  ";
   userLabels[3].childNodes[0].textContent = "\u914d\u989d (GB)\n                  ";
   userLabels[4].childNodes[0].textContent = "\u5230\u671f\u65e5\u671f\n                  ";
-  userLabels[5].childNodes[0].textContent = "\u72b6\u6001\n                  ";
+  userLabels[5].childNodes[0].textContent = "\u7528\u6237\u8def\u7531\n                  ";
+  userLabels[6].childNodes[0].textContent = "\u72b6\u6001\n                  ";
   document.querySelector('#user-status option[value="enabled"]').textContent = "\u5df2\u542f\u7528";
   document.querySelector('#user-status option[value="warning"]').textContent = "\u544a\u8b66";
   document.querySelector('#user-status option[value="disabled"]').textContent = "\u5df2\u505c\u7528";
@@ -415,11 +400,12 @@ function localizeStaticText() {
   userHeaders[0].textContent = "\u7528\u6237\u540d";
   userHeaders[1].textContent = "\u534f\u8bae";
   userHeaders[2].textContent = "\u7aef\u53e3";
-  userHeaders[3].textContent = "\u5df2\u7528\u6d41\u91cf";
-  userHeaders[4].textContent = "\u914d\u989d";
-  userHeaders[5].textContent = "\u5230\u671f\u65f6\u95f4";
-  userHeaders[6].textContent = "\u72b6\u6001";
-  userHeaders[7].textContent = "\u64cd\u4f5c";
+  userHeaders[3].textContent = "\u7528\u6237\u8def\u7531";
+  userHeaders[4].textContent = "\u5df2\u7528\u6d41\u91cf";
+  userHeaders[5].textContent = "\u914d\u989d";
+  userHeaders[6].textContent = "\u5230\u671f\u65f6\u95f4";
+  userHeaders[7].textContent = "\u72b6\u6001";
+  userHeaders[8].textContent = "\u64cd\u4f5c";
 
   document.querySelector("#subscription .accent-gold h4").textContent = "\u8ba2\u9605\u5165\u53e3";
   document.querySelector("#subscription .accent-gold p").textContent =
@@ -660,9 +646,23 @@ function renderProtocols() {
 
   const installBody = document.getElementById("install-protocol-table-body");
   if (installBody) installBody.innerHTML = markup;
+}
 
-  const uninstallBody = document.getElementById("protocol-table-body");
-  if (uninstallBody) uninstallBody.innerHTML = markup;
+function renderUserRoutingOptions() {
+  const select = document.getElementById("user-routing");
+  if (!select) return;
+
+  const currentValue = select.value;
+  const options = Array.isArray(state.userRoutingOptions) && state.userRoutingOptions.length
+    ? state.userRoutingOptions
+    : [{ value: "", label: "\u5168\u5c40\u89c4\u5219" }, { value: "direct", label: "\u76f4\u8fde" }];
+
+  select.innerHTML = options
+    .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
+    .join("");
+
+  const hasCurrent = options.some((item) => item.value === currentValue);
+  select.value = hasCurrent ? currentValue : "";
 }
 
 function selectedCoreChannel(name, fallback = "stable") {
@@ -714,6 +714,7 @@ function renderUsers() {
   document.getElementById("users-total").textContent = String(state.users.length);
   document.getElementById("users-warning").textContent = String(state.users.filter((item) => item.status !== "enabled").length);
   document.getElementById("users-expiring").textContent = String(state.users.filter((item) => item.expire_at).length);
+  renderUserRoutingOptions();
 
   const body = document.getElementById("user-table-body");
   body.innerHTML = state.users
@@ -723,6 +724,7 @@ function renderUsers() {
           <td>${escapeHtml(item.username)}</td>
           <td>${escapeHtml(item.protocol)}</td>
           <td>${escapeHtml(item.port)}</td>
+          <td>${escapeHtml(item.routing_label || formatUserRoutingLabel(item.routing))}</td>
           <td>${Number(item.used_gb).toFixed(1)} GB</td>
           <td>${Number(item.quota_gb).toFixed(1)} GB</td>
           <td>${escapeHtml(item.expire_at)}</td>
@@ -781,6 +783,7 @@ async function refreshAll() {
   state.meta = meta;
   state.protocols = protocols;
   state.cores = cores;
+  state.userRoutingOptions = meta.user_routing_options || [];
   state.coreChannels = Object.fromEntries(
     cores.map((item) => [item.name, state.coreChannels[item.name] || item.channel || "stable"])
   );
@@ -986,7 +989,8 @@ async function createUser() {
     protocol: requireValue("user-protocol", "\u534f\u8bae"),
     port: requireValue("user-port", "\u7aef\u53e3"),
     quota_gb: requireValue("user-quota", "\u914d\u989d"),
-    expire_at: requireValue("user-expire", "\u5230\u671f\u65e5\u671f"),
+    expire_at: document.getElementById("user-expire").value.trim(),
+    routing: document.getElementById("user-routing")?.value ?? "",
     status: requireValue("user-status", "\u72b6\u6001"),
   };
   const result = await api("/api/users", {

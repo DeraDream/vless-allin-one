@@ -40,6 +40,10 @@ class MockAdapter(BaseAdapter):
             "platform": os.name,
             "cfg_dir": "",
             "live_capable": False,
+            "user_routing_options": [
+                {"value": "", "label": "全局规则"},
+                {"value": "direct", "label": "直连"},
+            ],
         }
 
     def dashboard(self) -> Dict[str, Any]:
@@ -165,7 +169,11 @@ class MockAdapter(BaseAdapter):
 
     def list_users(self) -> List[Dict[str, Any]]:
         with self.store.connect() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM users ORDER BY id DESC").fetchall()]
+            rows = [dict(row) for row in conn.execute("SELECT * FROM users ORDER BY id DESC").fetchall()]
+        for row in rows:
+            row.setdefault("routing", "")
+            row.setdefault("routing_label", "全局规则")
+        return rows
 
     def create_user(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         with self.store.connect() as conn:
@@ -385,11 +393,22 @@ class LiveAdapter(BaseAdapter):
         return lines[-int(limit):]
 
     def meta(self) -> Dict[str, Any]:
+        routing_options = [
+            {"value": "", "label": "全局规则"},
+            {"value": "direct", "label": "直连"},
+        ]
+        try:
+            result = self._run("user-routing-options")
+            if isinstance(result, list) and result:
+                routing_options = result
+        except Exception:
+            pass
         return {
             "mode": "live",
             "platform": os.name,
             "cfg_dir": self.cfg_dir,
             "live_capable": True,
+            "user_routing_options": routing_options,
         }
 
     def dashboard(self) -> Dict[str, Any]:
