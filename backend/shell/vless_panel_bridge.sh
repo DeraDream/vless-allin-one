@@ -41,8 +41,30 @@ progress_emit() {
   printf '__PROGRESS__:%s\n' "$message" >&2
 }
 
+xray_bin() {
+  if command -v xray >/dev/null 2>&1; then
+    command -v xray
+    return 0
+  fi
+  [[ -x /usr/local/bin/xray ]] && { echo /usr/local/bin/xray; return 0; }
+  [[ -x /usr/bin/xray ]] && { echo /usr/bin/xray; return 0; }
+  return 1
+}
+
+singbox_bin() {
+  if command -v sing-box >/dev/null 2>&1; then
+    command -v sing-box
+    return 0
+  fi
+  [[ -x /usr/local/bin/sing-box ]] && { echo /usr/local/bin/sing-box; return 0; }
+  [[ -x /usr/bin/sing-box ]] && { echo /usr/bin/sing-box; return 0; }
+  return 1
+}
+
 reality_keys_generate() {
-  xray x25519 2>&1
+  local bin
+  bin="$(xray_bin)" || return 1
+  "$bin" x25519 2>&1
 }
 
 reality_key_extract() {
@@ -74,14 +96,14 @@ ensure_base_dependencies() {
 }
 
 ensure_xray_ready() {
-  if ! command -v xray >/dev/null 2>&1 && [[ ! -x /usr/local/bin/xray ]] && [[ ! -x /usr/bin/xray ]]; then
+  if ! xray_bin >/dev/null 2>&1; then
     check_dependencies >/dev/null 2>&1 || true
     install_xray >/dev/null 2>&1 || { json_fail "Xray 安装失败"; exit 1; }
   fi
 }
 
 ensure_singbox_ready() {
-  if ! command -v sing-box >/dev/null 2>&1 && [[ ! -x /usr/local/bin/sing-box ]] && [[ ! -x /usr/bin/sing-box ]]; then
+  if ! singbox_bin >/dev/null 2>&1; then
     check_dependencies >/dev/null 2>&1 || true
     install_singbox >/dev/null 2>&1 || { json_fail "Sing-box 安装失败"; exit 1; }
   fi
