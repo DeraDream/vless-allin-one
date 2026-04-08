@@ -31,6 +31,11 @@ json_fail() {
   jq -n --arg msg "$message" '{ok:false,message:$msg}'
 }
 
+progress_emit() {
+  local message="$1"
+  printf '__PROGRESS__:%s\n' "$message" >&2
+}
+
 payload_get() {
   local key="$1"
   printf '%s' "$payload" | jq -r --arg key "$key" '.[$key] // empty'
@@ -95,98 +100,127 @@ panel_reload_all_routing() {
   panel_reload_core "singbox"
 }
 
+panel_reload_services() {
+  panel_reload_core "xray"
+  panel_reload_core "singbox"
+  json_ok "services reloaded"
+}
+
 panel_install_protocol() {
   ensure_base_dependencies
+  progress_emit "检查安装参数"
 
-  local protocol port domain transport cert_mode notes
+  local protocol port domain transport cert_mode notes short_id server_name
   protocol="$(payload_get protocol)"
   port="$(payload_get port)"
   domain="$(payload_get domain)"
   transport="$(payload_get transport)"
   cert_mode="$(payload_get cert_mode)"
   notes="$(payload_get notes)"
+  short_id="$(payload_get short_id)"
+  server_name="$(payload_get server_name)"
 
   [[ -z "$protocol" || -z "$port" ]] && { json_fail "缺少协议或端口"; exit 1; }
 
   case "$protocol" in
     vless)
+      progress_emit "检查 Xray 依赖"
       ensure_xray_ready
       local uuid sid keys privkey pubkey sni
       uuid="$(gen_uuid)"
-      sid="$(gen_sid)"
-      sni="${domain:-$(gen_sni)}"
+      sid="${short_id:-$(gen_sid)}"
+      sni="${server_name:-${domain:-$(gen_sni)}}"
+      progress_emit "生成 Reality 密钥"
       keys="$(xray x25519 2>/dev/null)"
       privkey="$(echo "$keys" | awk '/PrivateKey:/ {print $2}')"
       pubkey="$(echo "$keys" | awk '/PublicKey:/ {print $2}')"
       [[ -z "$pubkey" ]] && pubkey="$(echo "$keys" | awk '/Password:/ {print $2}')"
       [[ -z "$privkey" || -z "$pubkey" ]] && { json_fail "Reality 密钥生成失败"; exit 1; }
+      progress_emit "写入 VLESS Reality 配置"
       gen_server_config "$uuid" "$port" "$privkey" "$pubkey" "$sid" "$sni" >/dev/null 2>&1
+      progress_emit "创建服务并启动"
       create_server_scripts >/dev/null 2>&1 || true
       create_service "$protocol" >/dev/null 2>&1 || true
       panel_reload_core "xray"
       json_ok "VLESS 已安装并写入脚本数据库"
       ;;
     vless-xhttp)
+      progress_emit "检查 Xray 依赖"
       ensure_xray_ready
       local uuid sid keys privkey pubkey sni path
       uuid="$(gen_uuid)"
-      sid="$(gen_sid)"
+      sid="${short_id:-$(gen_sid)}"
       path="/xhttp"
-      sni="${domain:-$(gen_sni)}"
+      sni="${server_name:-${domain:-$(gen_sni)}}"
+      progress_emit "生成 XHTTP Reality 密钥"
       keys="$(xray x25519 2>/dev/null)"
       privkey="$(echo "$keys" | awk '/PrivateKey:/ {print $2}')"
       pubkey="$(echo "$keys" | awk '/PublicKey:/ {print $2}')"
       [[ -z "$pubkey" ]] && pubkey="$(echo "$keys" | awk '/Password:/ {print $2}')"
       [[ -z "$privkey" || -z "$pubkey" ]] && { json_fail "XHTTP Reality 密钥生成失败"; exit 1; }
+      progress_emit "写入 VLESS-XHTTP 配置"
       gen_vless_xhttp_server_config "$uuid" "$port" "$privkey" "$pubkey" "$sid" "$sni" "$path" >/dev/null 2>&1
+      progress_emit "创建服务并启动"
       create_server_scripts >/dev/null 2>&1 || true
       create_service "$protocol" >/dev/null 2>&1 || true
       panel_reload_core "xray"
       json_ok "VLESS-XHTTP 已安装并写入脚本数据库"
       ;;
     trojan)
+      progress_emit "检查 Xray 依赖"
       ensure_xray_ready
       local password sni
       password="$(gen_password 16)"
-      sni="${domain:-$(gen_sni)}"
+      sni="${domain:-${server_name:-$(gen_sni)}}"
+      progress_emit "写入 Trojan 配置"
       [[ "$cert_mode" == "self-signed" || ! -f "$CFG/certs/server.crt" ]] && gen_self_cert "$sni" >/dev/null 2>&1
       gen_trojan_server_config "$password" "$port" "$sni" >/dev/null 2>&1
+      progress_emit "创建服务并启动"
       create_server_scripts >/dev/null 2>&1 || true
       create_service "$protocol" >/dev/null 2>&1 || true
       panel_reload_core "xray"
       json_ok "Trojan 已安装并写入脚本数据库"
       ;;
     vmess-ws)
+      progress_emit "检查 Xray 依赖"
       ensure_xray_ready
       local uuid sni path
       uuid="$(gen_uuid)"
-      sni="${domain:-$(gen_sni)}"
+      sni="${domain:-${server_name:-$(gen_sni)}}"
       path="/vmess"
+      progress_emit "写入 VMess 配置"
       [[ "$cert_mode" == "self-signed" || ! -f "$CFG/certs/server.crt" ]] && gen_self_cert "$sni" >/dev/null 2>&1
       gen_vmess_ws_server_config "$uuid" "$port" "$sni" "$path" "false" >/dev/null 2>&1
+      progress_emit "创建服务并启动"
       create_server_scripts >/dev/null 2>&1 || true
       create_service "$protocol" >/dev/null 2>&1 || true
       panel_reload_core "xray"
       json_ok "VMess-WS 已安装并写入脚本数据库"
       ;;
     hy2)
+      progress_emit "检查 Sing-box 依赖"
       ensure_singbox_ready
       local password sni
       password="$(gen_password 16)"
-      sni="${domain:-$(gen_sni)}"
+      sni="${domain:-${server_name:-$(gen_sni)}}"
+      progress_emit "写入 Hysteria2 配置"
       gen_hy2_server_config "$password" "$port" "$sni" 0 20000 50000 >/dev/null 2>&1
+      progress_emit "创建服务并启动"
       create_server_scripts >/dev/null 2>&1 || true
       create_singbox_service >/dev/null 2>&1 || true
       panel_reload_core "singbox"
       json_ok "Hysteria2 已安装并写入脚本数据库"
       ;;
     tuic)
+      progress_emit "检查 Sing-box 依赖"
       ensure_singbox_ready
       local uuid password sni
       uuid="$(gen_uuid)"
       password="$(gen_password 16)"
-      sni="${domain:-$(gen_sni)}"
+      sni="${domain:-${server_name:-$(gen_sni)}}"
+      progress_emit "写入 TUIC 配置"
       gen_tuic_server_config "$uuid" "$password" "$port" "$sni" 0 20000 50000 >/dev/null 2>&1
+      progress_emit "创建服务并启动"
       create_server_scripts >/dev/null 2>&1 || true
       create_singbox_service >/dev/null 2>&1 || true
       panel_reload_core "singbox"
@@ -333,6 +367,35 @@ panel_reset_subscription() {
   }
   [[ -z "$new_uuid" ]] && { json_fail "订阅 UUID 重置失败"; exit 1; }
   json_ok "订阅 UUID 已重置为 $new_uuid"
+}
+
+panel_update_subscription() {
+  local sub_name default_format tmp_file
+  sub_name="$(payload_get name)"
+  default_format="$(payload_get default_format)"
+
+  [[ -z "$sub_name" || -z "$default_format" ]] && {
+    json_fail "订阅名称或默认格式不能为空"
+    exit 1
+  }
+
+  tmp_file="$(mktemp)"
+  jq \
+    --arg sub_name "$sub_name" \
+    --arg default_format "$default_format" \
+    '
+      .panel = (.panel // {}) |
+      .panel.subscription = (.panel.subscription // {}) |
+      .panel.subscription.name = $sub_name |
+      .panel.subscription.default_format = $default_format
+    ' "$DB_FILE" > "$tmp_file" || {
+      rm -f "$tmp_file"
+      json_fail "订阅设置保存失败"
+      exit 1
+    }
+
+  mv "$tmp_file" "$DB_FILE"
+  json_ok "订阅设置已保存"
 }
 
 panel_add_routing() {
@@ -527,13 +590,21 @@ emit_subscriptions() {
   local sub_uuid
   sub_uuid="$(get_sub_uuid 2>/dev/null || true)"
   sub_uuid="${sub_uuid:-unknown}"
+  local sub_name
+  sub_name="$(jq -r '.panel.subscription.name // "Server Subscription"' "$DB_FILE" 2>/dev/null || true)"
+  sub_name="${sub_name:-Server Subscription}"
+  local default_format
+  default_format="$(jq -r '.panel.subscription.default_format // "v2ray"' "$DB_FILE" 2>/dev/null || true)"
+  default_format="${default_format:-v2ray}"
   jq -n \
+    --arg sub_name "$sub_name" \
     --arg token "$sub_uuid" \
+    --arg default_format "$default_format" \
     '[{
       id: 1,
-      name: "Server Subscription",
+      name: $sub_name,
       sub_uuid: $token,
-      default_format: "v2ray",
+      default_format: $default_format,
       base_url: "https://your-domain.example/sub",
       updated_at: "",
       links: {
@@ -567,6 +638,8 @@ case "$command" in
   core-update) panel_update_core ;;
   user-create) panel_create_user ;;
   user-delete) panel_delete_user ;;
+  reload-services) panel_reload_services ;;
+  subscription-update) panel_update_subscription ;;
   subscription-reset) panel_reset_subscription ;;
   routing-add) panel_add_routing ;;
   routing-delete) panel_delete_routing ;;

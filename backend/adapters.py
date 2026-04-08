@@ -3,19 +3,36 @@ import os
 import subprocess
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .store import PanelStore
 
 
 class BaseAdapter:
+    def meta(self) -> Dict[str, Any]:
+        raise NotImplementedError
+
     def dashboard(self) -> Dict[str, Any]:
         raise NotImplementedError
+
+    def start_install_process(self, payload: Dict[str, Any]):
+        raise NotImplementedError
+
+    def reload_services(self) -> None:
+        return None
 
 
 class MockAdapter(BaseAdapter):
     def __init__(self, store: PanelStore) -> None:
         self.store = store
+
+    def meta(self) -> Dict[str, Any]:
+        return {
+            "mode": "mock",
+            "platform": os.name,
+            "cfg_dir": "",
+            "live_capable": False,
+        }
 
     def dashboard(self) -> Dict[str, Any]:
         with self.store.connect() as conn:
@@ -25,9 +42,12 @@ class MockAdapter(BaseAdapter):
                 "SELECT COUNT(*) FROM users WHERE status IN ('warning', 'disabled')"
             ).fetchone()[0]
             routes = conn.execute("SELECT COUNT(*) FROM routing_rules").fetchone()[0]
-            recent_logs = [dict(row) for row in conn.execute(
-                "SELECT action, detail, created_at FROM activity_logs ORDER BY id DESC LIMIT 6"
-            ).fetchall()]
+            recent_logs = [
+                dict(row)
+                for row in conn.execute(
+                    "SELECT action, detail, created_at FROM activity_logs ORDER BY id DESC LIMIT 6"
+                ).fetchall()
+            ]
             return {
                 "stats": {
                     "installed": installed,
@@ -38,18 +58,15 @@ class MockAdapter(BaseAdapter):
                 "logs": recent_logs,
             }
 
+    def start_install_process(self, payload: Dict[str, Any]):
+        raise RuntimeError("mock mode does not use subprocess install")
+
     def list_protocols(self) -> List[Dict[str, Any]]:
         with self.store.connect() as conn:
             rows = conn.execute(
                 "SELECT id, name, core, port, service, status, config_json, created_at FROM protocols ORDER BY id DESC"
             ).fetchall()
-            return [
-                {
-                    **dict(row),
-                    "config": json.loads(row["config_json"]),
-                }
-                for row in rows
-            ]
+            return [{**dict(row), "config": json.loads(row["config_json"])} for row in rows]
 
     def install_protocol(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         now = datetime.utcnow().isoformat(timespec="seconds")
@@ -57,11 +74,12 @@ class MockAdapter(BaseAdapter):
         core = payload["core"]
         port = int(payload["port"])
         service = "vless-reality" if core == "Xray" else "vless-singbox"
-        status = "running"
         config = {
             "domain": payload.get("domain", ""),
             "cert_mode": payload.get("cert_mode", "acme"),
             "transport": payload.get("transport", ""),
+            "short_id": payload.get("short_id", ""),
+            "server_name": payload.get("server_name", ""),
             "notes": payload.get("notes", ""),
         }
         with self.store.connect() as conn:
@@ -70,7 +88,7 @@ class MockAdapter(BaseAdapter):
                 INSERT INTO protocols (name, core, port, service, status, config_json, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (protocol, core, port, service, status, json.dumps(config, ensure_ascii=True), now),
+                (protocol, core, port, service, "running", json.dumps(config, ensure_ascii=True), now),
             )
             self.store.log(conn, "install", f"Installed {protocol} on port {port} in mock mode")
         return {"ok": True, "message": f"{protocol} 已加入本地面板数据"}
@@ -95,7 +113,7 @@ class MockAdapter(BaseAdapter):
                 (target_version, target_version, name),
             )
             self.store.log(conn, "core-update", f"Updated {name} to {target_version} in mock mode")
-        return {"ok": True, "message": f"{name} 已切换到 {target_version}"}
+        return {"ok": True, "message": f"{name} 已更新到 {target_version}"}
 
     def list_users(self) -> List[Dict[str, Any]]:
         with self.store.connect() as conn:
@@ -143,6 +161,24 @@ class MockAdapter(BaseAdapter):
             }
         return rows
 
+    def update_subscription(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        with self.store.connect() as conn:
+            conn.execute(
+                """
+                UPDATE subscriptions
+                SET name = ?, default_format = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    payload["name"],
+                    payload["default_format"],
+                    datetime.utcnow().isoformat(timespec="seconds"),
+                    int(payload["id"]),
+                ),
+            )
+            self.store.log(conn, "subscription-update", f"Updated subscription {payload['id']} in mock mode")
+        return {"ok": True, "message": "订阅设置已保存"}
+
     def reset_subscription_uuid(self, sub_id: int) -> Dict[str, Any]:
         new_uuid = str(uuid.uuid4())
         with self.store.connect() as conn:
@@ -188,7 +224,7 @@ class LiveAdapter(BaseAdapter):
         self.cfg_dir = cfg_dir
         self.bridge = os.path.join(root_dir, "backend", "shell", "vless_panel_bridge.sh")
 
-    def _run(self, command: str, payload: Dict[str, Any] = None) -> Any:
+    def _run(self, command: str, payload: Optional[Dict[str, Any]] = None) -> Any:
         env = os.environ.copy()
         env["VLESS_CFG"] = self.cfg_dir
         args = [self.bridge, command]
@@ -206,12 +242,36 @@ class LiveAdapter(BaseAdapter):
             stdout = (proc.stdout or "").strip()
             if stdout:
                 try:
-                    payload = json.loads(stdout)
-                    raise RuntimeError(payload.get("message") or f"{command} failed")
+                    error_payload = json.loads(stdout)
+                    raise RuntimeError(error_payload.get("message") or f"{command} failed")
                 except json.JSONDecodeError:
                     pass
             raise RuntimeError(proc.stderr.strip() or stdout or f"{command} failed")
         return json.loads(proc.stdout or "{}")
+
+    def start_install_process(self, payload: Dict[str, Any]):
+        env = os.environ.copy()
+        env["VLESS_CFG"] = self.cfg_dir
+        args = [self.bridge, "install", json.dumps(payload, ensure_ascii=True)]
+        return subprocess.Popen(
+            args,
+            cwd=self.root_dir,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+    def reload_services(self) -> None:
+        self._run("reload-services")
+
+    def meta(self) -> Dict[str, Any]:
+        return {
+            "mode": "live",
+            "platform": os.name,
+            "cfg_dir": self.cfg_dir,
+            "live_capable": True,
+        }
 
     def dashboard(self) -> Dict[str, Any]:
         return self._run("dashboard")
@@ -227,6 +287,9 @@ class LiveAdapter(BaseAdapter):
 
     def list_subscriptions(self) -> List[Dict[str, Any]]:
         return self._run("subscriptions")
+
+    def update_subscription(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._run("subscription-update", payload)
 
     def list_routing(self) -> List[Dict[str, Any]]:
         return self._run("routing")

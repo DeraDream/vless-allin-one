@@ -194,7 +194,21 @@ select {
 
 .topbar-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .hero {
@@ -249,6 +263,144 @@ select {
 
 .hero-stats article span {
   color: rgba(255, 255, 255, 0.72);
+}
+
+.install-status-card {
+  margin: 4px 0 18px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.install-status-head,
+.install-progress-row,
+.install-status-event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.install-status-head h4,
+.install-status-event p {
+  margin: 0;
+}
+
+.install-status-head h4 {
+  font-size: 1rem;
+}
+
+.install-status-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.state-idle {
+  color: var(--muted);
+  background: rgba(110, 123, 145, 0.12);
+}
+
+.state-running {
+  color: var(--blue);
+  background: rgba(36, 107, 255, 0.12);
+}
+
+.state-success {
+  color: var(--green);
+  background: rgba(28, 155, 103, 0.14);
+}
+
+.state-cancelled {
+  color: var(--amber);
+  background: rgba(217, 139, 9, 0.14);
+}
+
+.state-error {
+  color: var(--red);
+  background: rgba(213, 83, 83, 0.14);
+}
+
+.install-progress-row {
+  margin-top: 14px;
+  margin-bottom: 10px;
+}
+
+.install-progress-row strong {
+  font-size: 1.1rem;
+}
+
+.install-progress-row span {
+  color: var(--muted);
+  text-align: right;
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #246bff 0%, #00b4d8 100%);
+  transition: width 0.25s ease;
+}
+
+.install-status-error {
+  margin: 12px 0 0;
+  color: var(--red);
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.install-status-events {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.install-status-event {
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.install-event-time {
+  min-width: 72px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.install-event-text {
+  flex: 1;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.install-event-text.is-warning {
+  color: var(--amber);
+}
+
+.install-event-text.is-error {
+  color: var(--red);
+}
+
+.install-status-empty {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .hero-stats strong,
@@ -309,6 +461,41 @@ select {
   box-shadow: 0 10px 24px rgba(36, 107, 255, 0.12);
 }
 
+.tab-panel[hidden] {
+  display: none !important;
+}
+
+.section-log-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.section-log-item {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.section-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.section-log-head strong {
+  color: var(--text);
+}
+
+.section-log-head span,
+.section-log-item p,
+.section-log-empty {
+  color: var(--muted);
+}
+
 .section {
   display: none;
 }
@@ -323,6 +510,10 @@ select {
   gap: 18px;
 }
 
+#install .section-layout {
+  grid-template-columns: 1fr;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -335,6 +526,29 @@ select {
   gap: 10px;
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.input-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-action > *:first-child {
+  flex: 1;
+}
+
+.small-btn {
+  flex: 0 0 auto;
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+.field-hint {
+  display: block;
+  margin-top: -2px;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .form-grid .full {
@@ -374,6 +588,11 @@ select:focus {
   display: flex;
   gap: 12px;
   margin: 16px 0 18px;
+}
+
+#install .inline-actions {
+  margin-top: 20px;
+  justify-content: flex-start;
 }
 
 .compact-form {

@@ -18,7 +18,7 @@
         <div class="brand">
           <div class="brand-mark">VS</div>
           <div>
-            <p class="brand-kicker">No Auth Console</p>
+            <p class="brand-kicker">免登录控制台</p>
             <h1>VLESS Server Panel</h1>
           </div>
         </div>
@@ -42,14 +42,14 @@
             <span class="menu-index">03</span>
             <span>
               <strong>卸载协议</strong>
-              <small>按协议或端口移除</small>
+              <small>按协议与端口移除实例</small>
             </span>
           </button>
           <button class="menu-item" data-section="users">
             <span class="menu-index">04</span>
             <span>
               <strong>用户管理</strong>
-              <small>多用户 / 流量 / 到期</small>
+              <small>流量 / 配额 / 到期时间</small>
             </span>
           </button>
           <button class="menu-item" data-section="subscription">
@@ -73,11 +73,11 @@
             <span class="status-dot"></span>
             <div>
               <p>当前模式</p>
-              <strong>服务端面板</strong>
+              <strong>本地联调 / 服务器部署</strong>
             </div>
           </div>
           <p class="sidebar-note">
-            参考 3x-ui 的信息密度和操作结构，保留无登录的轻量体验。
+            本地建议先用 Mock 模式联调界面和流程，确认交互无误后再切到 Linux VPS 的 Live 模式。
           </p>
         </div>
       </aside>
@@ -85,38 +85,38 @@
       <main class="main">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Multi Protocol Control Surface</p>
+            <p class="eyebrow">多协议可视化控制面板</p>
             <h2 id="page-title">安装协议</h2>
           </div>
           <div class="topbar-actions">
             <button class="ghost-btn" id="refresh-all-btn">同步面板数据</button>
-            <button class="primary-btn" id="mode-indicator-btn">Mock Mode</button>
+            <div class="mode-indicator" id="mode-indicator-btn">模式检测中</div>
           </div>
         </header>
 
         <section class="hero">
           <div class="hero-copy">
-            <p class="hero-tag">v3.4.10 compatible layout</p>
-            <h3>把脚本里的常用能力收进一个可视化菜单</h3>
+            <p class="hero-tag">Windows 本地调试 + Linux 正式部署</p>
+            <h3>把脚本能力接成可视化面板，先本地跑通，再回到服务器上线</h3>
             <p>
-              面板按脚本结构重组安装、核心更新、卸载、用户、订阅和分流。
-              当前是前端 GUI 骨架，后续可以直接对接脚本命令或 API。
+              这个面板围绕安装、核心更新、卸载、用户、订阅和分流六类操作组织。
+              Windows 本地可用 Mock 数据直接测试 GUI，Linux 服务器再切到 Live 模式连接实际脚本。
             </p>
           </div>
           <div class="hero-stats">
             <article>
-              <span>Installed</span>
-              <strong id="stat-installed">0 Protocols</strong>
+              <span>已安装协议</span>
+              <strong id="stat-installed">0 个协议</strong>
               <small id="stat-installed-sub">等待加载</small>
             </article>
             <article>
-              <span>Users</span>
+              <span>用户数</span>
               <strong id="stat-users">0</strong>
               <small id="stat-users-sub">等待加载</small>
             </article>
             <article>
-              <span>Routing</span>
-              <strong id="stat-routing">0 Rules</strong>
+              <span>分流规则</span>
+              <strong id="stat-routing">0 条规则</strong>
               <small id="stat-routing-sub">等待加载</small>
             </article>
           </div>
@@ -126,7 +126,7 @@
           <div class="panel panel-wide">
             <div class="panel-head">
               <div>
-                <p class="panel-kicker">Operation Area</p>
+                <p class="panel-kicker">操作区</p>
                 <h3 id="section-heading">安装协议</h3>
               </div>
               <div class="segment-control">
@@ -138,9 +138,9 @@
 
             <section class="section is-visible" id="install">
               <div class="section-layout">
-                <form class="form-grid">
+                <form class="form-grid" onsubmit="return false;">
                   <label>
-                    协议类型
+                    ????
                     <select id="install-protocol">
                       <option value="vless">VLESS + Reality</option>
                       <option value="vless-xhttp">VLESS + XHTTP</option>
@@ -151,55 +151,65 @@
                     </select>
                   </label>
                   <label>
-                    监听端口
-                    <input type="text" id="install-port" value="443" />
+                    ????
+                    <div class="input-action">
+                      <input type="text" id="install-port" value="443" />
+                      <button type="button" class="ghost-btn small-btn" id="install-port-random-btn">??</button>
+                    </div>
                   </label>
                   <label>
-                    域名 / SNI
-                    <input type="text" id="install-domain" value="gateway.example.com" />
+                    ??????
+                    <input type="text" id="install-domain" value="" placeholder="??????? CDN ???" />
+                    <small class="field-hint" id="install-domain-hint">???????????????????????????</small>
                   </label>
                   <label>
-                    证书模式
+                    ????
                     <select id="install-cert-mode">
-                      <option value="acme">ACME 自动申请</option>
-                      <option value="existing">已有证书复用</option>
-                      <option value="self-signed">自签证书</option>
+                      <option value="acme">ACME ????</option>
+                      <option value="existing">??????</option>
+                      <option value="self-signed">????</option>
+                    </select>
+                  </label>
+                  <label>
+                    Reality ? ID
+                    <div class="input-action">
+                      <input type="text" id="install-short-id" value="" placeholder="??????" />
+                      <button type="button" class="ghost-btn small-btn" id="install-short-id-random-btn">??</button>
+                    </div>
+                  </label>
+                  <label>
+                    Reality serverName
+                    <select id="install-server-name">
+                      <option value="">??????</option>
+                      <option value="developer.apple.com">developer.apple.com</option>
+                      <option value="www.microsoft.com">www.microsoft.com</option>
+                      <option value="www.cloudflare.com">www.cloudflare.com</option>
+                      <option value="www.amazon.com">www.amazon.com</option>
+                      <option value="www.google.com">www.google.com</option>
+                      <option value="www.github.com">www.github.com</option>
                     </select>
                   </label>
                   <label class="full">
-                    传输参数
-                    <textarea rows="4" id="install-notes">UUID: auto-generate
-Short ID: auto-generate
-Path: /edge
-Reality SNI: www.microsoft.com</textarea>
+                    ????
+                    <textarea rows="4" id="install-notes">Path: /edge
+Flow: xtls-rprx-vision
+Remark: install from panel</textarea>
                   </label>
                   <label>
-                    核心
+                    ??
                     <select id="install-core">
                       <option value="Xray">Xray</option>
                       <option value="Sing-box">Sing-box</option>
                     </select>
                   </label>
                   <label>
-                    传输
+                    ????
                     <input type="text" id="install-transport" value="reality" />
                   </label>
                 </form>
 
-                <div class="info-stack">
-                  <article class="mini-card accent-blue">
-                    <h4>安装向导映射</h4>
-                    <p>对应脚本里的 `do_install_server -> gen_*_server_config -> start_services`。</p>
-                  </article>
-                  <article class="mini-card">
-                    <h4>推荐协议</h4>
-                    <ul>
-                      <li>VLESS + Reality 适合默认首选</li>
-                      <li>Hy2 / TUIC 适合 QUIC 场景</li>
-                      <li>WS 类协议便于 CDN 转发</li>
-                    </ul>
-                  </article>
-                  <button class="primary-btn" id="install-submit-btn">提交安装</button>
+                <div class="inline-actions">
+                  <button class="primary-btn" id="install-submit-btn">????</button>
                 </div>
               </div>
             </section>
@@ -213,7 +223,7 @@ Reality SNI: www.microsoft.com</textarea>
                       <th>当前版本</th>
                       <th>目标版本</th>
                       <th>通道</th>
-                      <th>动作</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody id="core-table-body"></tbody>
@@ -229,7 +239,7 @@ Reality SNI: www.microsoft.com</textarea>
                       <th>协议</th>
                       <th>核心</th>
                       <th>端口</th>
-                      <th>共享服务</th>
+                      <th>服务</th>
                       <th>状态</th>
                       <th>操作</th>
                     </tr>
@@ -240,7 +250,7 @@ Reality SNI: www.microsoft.com</textarea>
 
               <div class="warning-box">
                 <strong>注意</strong>
-                <p>这里的 UI 预留了“按协议卸载”和“按端口实例卸载”两种入口，方便适配脚本里的多端口模式。</p>
+                <p>本地 Mock 模式会修改 `runtime/panel.db`，Linux Live 模式则会实际改动服务器脚本数据。</p>
               </div>
             </section>
 
@@ -249,21 +259,21 @@ Reality SNI: www.microsoft.com</textarea>
                 <article class="metric-card">
                   <span>活跃用户</span>
                   <strong id="users-total">0</strong>
-                  <small>本地面板数据</small>
+                  <small>来自当前面板数据</small>
                 </article>
                 <article class="metric-card">
-                  <span>流量超额</span>
+                  <span>异常状态</span>
                   <strong id="users-warning">0</strong>
                   <small>warning / disabled</small>
                 </article>
                 <article class="metric-card">
-                  <span>即将到期</span>
+                  <span>带到期时间</span>
                   <strong id="users-expiring">0</strong>
-                  <small>到期字段可继续细化</small>
+                  <small>可继续按需扩展提醒逻辑</small>
                 </article>
               </div>
 
-              <form class="form-grid compact-form">
+              <form class="form-grid compact-form" onsubmit="return false;">
                 <label>
                   用户名
                   <input type="text" id="user-name" value="demo-user" />
@@ -277,11 +287,11 @@ Reality SNI: www.microsoft.com</textarea>
                   <input type="text" id="user-port" value="443" />
                 </label>
                 <label>
-                  配额(GB)
+                  配额 (GB)
                   <input type="text" id="user-quota" value="100" />
                 </label>
                 <label>
-                  到期日
+                  到期日期
                   <input type="date" id="user-expire" value="2026-04-20" />
                 </label>
                 <label>
@@ -321,15 +331,15 @@ Reality SNI: www.microsoft.com</textarea>
                 <div class="info-stack">
                   <article class="mini-card accent-gold">
                     <h4>订阅入口</h4>
-                    <p>聚合脚本里的 `gen_v2ray_sub / gen_clash_sub / gen_surge_sub` 三种输出。</p>
+                    <p>聚合生成 V2Ray、Clash、Surge 三种订阅地址，便于客户端快速接入。</p>
                   </article>
                   <article class="mini-card">
-                    <h4>UUID</h4>
+                    <h4>当前 UUID</h4>
                     <code id="subscription-uuid">等待加载</code>
                   </article>
                 </div>
 
-                <form class="form-grid">
+                <form class="form-grid" onsubmit="return false;">
                   <label>
                     订阅名称
                     <input type="text" id="subscription-name" value="Main Server Bundle" />
@@ -344,10 +354,11 @@ Reality SNI: www.microsoft.com</textarea>
                   </label>
                   <label class="full">
                     订阅链接
-                    <textarea rows="4" id="subscription-links"></textarea>
+                    <textarea rows="4" id="subscription-links" readonly></textarea>
                   </label>
                 </form>
                 <div class="inline-actions">
+                  <button class="ghost-btn" id="subscription-save-btn">保存订阅设置</button>
                   <button class="primary-btn" id="subscription-reset-btn">重置订阅 UUID</button>
                 </div>
               </div>
@@ -358,21 +369,21 @@ Reality SNI: www.microsoft.com</textarea>
                 <article class="metric-card">
                   <span>分流规则</span>
                   <strong id="routing-total">0</strong>
-                  <small>global + user based</small>
+                  <small>全局 + 用户维度</small>
                 </article>
                 <article class="metric-card">
-                  <span>链式节点</span>
+                  <span>链式出口</span>
                   <strong>2</strong>
-                  <small>可继续接脚本订阅导入</small>
+                  <small>后续可继续接脚本导入</small>
                 </article>
                 <article class="metric-card">
                   <span>负载均衡</span>
                   <strong>1</strong>
-                  <small>本地演示数据</small>
+                  <small>当前为演示占位数据</small>
                 </article>
               </div>
 
-              <form class="form-grid compact-form">
+              <form class="form-grid compact-form" onsubmit="return false;">
                 <label>
                   规则类型
                   <input type="text" id="routing-type" value="domain" />
@@ -419,7 +430,7 @@ Reality SNI: www.microsoft.com</textarea>
           <div class="panel panel-side">
             <div class="panel-head">
               <div>
-                <p class="panel-kicker">Quick View</p>
+                <p class="panel-kicker">快速概览</p>
                 <h3>运行概览</h3>
               </div>
             </div>
@@ -431,12 +442,10 @@ Reality SNI: www.microsoft.com</textarea>
             <div class="panel-divider"></div>
 
             <div class="command-box">
-              <p class="panel-kicker">Backend Hook</p>
-              <code id="command-preview">bash vless-server.sh</code>
-              <p id="toast-message">面板就绪，等待加载数据。</p>
-              <p>
-                当前前端保留命令预览区域，后续可把按钮事件直接对接到脚本命令或后端 API。
-              </p>
+              <p class="panel-kicker">后端接口</p>
+              <code id="command-preview">python -m backend.server</code>
+              <p id="toast-message">面板已就绪，等待加载数据。</p>
+              <p>当前界面按钮都通过本地 API 触发，Windows 联调用 Mock 模式，Linux 部署切到 Live 模式。</p>
             </div>
           </div>
         </section>
