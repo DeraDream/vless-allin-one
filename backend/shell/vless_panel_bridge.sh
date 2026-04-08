@@ -89,6 +89,19 @@ reality_key_extract() {
       '
 }
 
+normalize_short_id() {
+  local value="$1"
+  value="$(printf '%s' "$value" | tr 'A-F' 'a-f' | tr -cd '0-9a-f')"
+  [[ -z "$value" ]] && { gen_sid; return 0; }
+  if (( ${#value} % 2 == 1 )); then
+    value="0${value}"
+  fi
+  if (( ${#value} > 16 )); then
+    value="${value:0:16}"
+  fi
+  printf '%s' "$value"
+}
+
 payload_get() {
   local key="$1"
   payload_validate || { json_fail "安装参数解析失败"; exit 1; }
@@ -206,7 +219,7 @@ panel_install_protocol() {
       ensure_xray_ready
       local uuid sid keys privkey pubkey sni
       uuid="$(gen_uuid)"
-      sid="${short_id:-$(gen_sid)}"
+      sid="$(normalize_short_id "${short_id:-$(gen_sid)}")"
       sni="${server_name:-${domain:-$(gen_sni)}}"
       progress_emit "生成 Reality 密钥"
       keys="$(reality_keys_generate)"
@@ -227,7 +240,7 @@ panel_install_protocol() {
       ensure_xray_ready
       local uuid sid keys privkey pubkey sni path
       uuid="$(gen_uuid)"
-      sid="${short_id:-$(gen_sid)}"
+      sid="$(normalize_short_id "${short_id:-$(gen_sid)}")"
       path="/xhttp"
       sni="${server_name:-${domain:-$(gen_sni)}}"
       progress_emit "生成 XHTTP Reality 密钥"

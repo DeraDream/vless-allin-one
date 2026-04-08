@@ -138,7 +138,7 @@ function randomPort(protocol) {
 
 function randomShortId() {
   const alphabet = "abcdef0123456789";
-  const length = randomInt(6, 12);
+  const length = 8;
   return Array.from({ length }, () => alphabet[randomInt(0, alphabet.length - 1)]).join("");
 }
 
