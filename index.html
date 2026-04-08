@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VLESS Server Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">VS</div>
+          <div>
+            <p class="brand-kicker">No Auth Console</p>
+            <h1>VLESS Server Panel</h1>
+          </div>
+        </div>
+
+        <nav class="menu">
+          <button class="menu-item is-active" data-section="install">
+            <span class="menu-index">01</span>
+            <span>
+              <strong>安装协议</strong>
+              <small>Reality / WS / Hy2 / TUIC</small>
+            </span>
+          </button>
+          <button class="menu-item" data-section="core">
+            <span class="menu-index">02</span>
+            <span>
+              <strong>核心版本管理</strong>
+              <small>Xray / Sing-box / Snell</small>
+            </span>
+          </button>
+          <button class="menu-item" data-section="uninstall">
+            <span class="menu-index">03</span>
+            <span>
+              <strong>卸载协议</strong>
+              <small>按协议或端口移除</small>
+            </span>
+          </button>
+          <button class="menu-item" data-section="users">
+            <span class="menu-index">04</span>
+            <span>
+              <strong>用户管理</strong>
+              <small>多用户 / 流量 / 到期</small>
+            </span>
+          </button>
+          <button class="menu-item" data-section="subscription">
+            <span class="menu-index">05</span>
+            <span>
+              <strong>订阅服务</strong>
+              <small>V2Ray / Clash / Surge</small>
+            </span>
+          </button>
+          <button class="menu-item" data-section="routing">
+            <span class="menu-index">06</span>
+            <span>
+              <strong>分流管理</strong>
+              <small>WARP / Chain / Balancer</small>
+            </span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="status-card">
+            <span class="status-dot"></span>
+            <div>
+              <p>当前模式</p>
+              <strong>服务端面板</strong>
+            </div>
+          </div>
+          <p class="sidebar-note">
+            参考 3x-ui 的信息密度和操作结构，保留无登录的轻量体验。
+          </p>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Multi Protocol Control Surface</p>
+            <h2 id="page-title">安装协议</h2>
+          </div>
+          <div class="topbar-actions">
+            <button class="ghost-btn" id="refresh-all-btn">同步面板数据</button>
+            <button class="primary-btn" id="mode-indicator-btn">Mock Mode</button>
+          </div>
+        </header>
+
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="hero-tag">v3.4.10 compatible layout</p>
+            <h3>把脚本里的常用能力收进一个可视化菜单</h3>
+            <p>
+              面板按脚本结构重组安装、核心更新、卸载、用户、订阅和分流。
+              当前是前端 GUI 骨架，后续可以直接对接脚本命令或 API。
+            </p>
+          </div>
+          <div class="hero-stats">
+            <article>
+              <span>Installed</span>
+              <strong id="stat-installed">0 Protocols</strong>
+              <small id="stat-installed-sub">等待加载</small>
+            </article>
+            <article>
+              <span>Users</span>
+              <strong id="stat-users">0</strong>
+              <small id="stat-users-sub">等待加载</small>
+            </article>
+            <article>
+              <span>Routing</span>
+              <strong id="stat-routing">0 Rules</strong>
+              <small id="stat-routing-sub">等待加载</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="content-grid">
+          <div class="panel panel-wide">
+            <div class="panel-head">
+              <div>
+                <p class="panel-kicker">Operation Area</p>
+                <h3 id="section-heading">安装协议</h3>
+              </div>
+              <div class="segment-control">
+                <button class="segment is-active">表单</button>
+                <button class="segment">批量任务</button>
+                <button class="segment">执行记录</button>
+              </div>
+            </div>
+
+            <section class="section is-visible" id="install">
+              <div class="section-layout">
+                <form class="form-grid">
+                  <label>
+                    协议类型
+                    <select id="install-protocol">
+                      <option value="vless">VLESS + Reality</option>
+                      <option value="vless-xhttp">VLESS + XHTTP</option>
+                      <option value="trojan">Trojan</option>
+                      <option value="vmess-ws">VMess + WS</option>
+                      <option value="hy2">Hysteria2</option>
+                      <option value="tuic">TUIC</option>
+                    </select>
+                  </label>
+                  <label>
+                    监听端口
+                    <input type="text" id="install-port" value="443" />
+                  </label>
+                  <label>
+                    域名 / SNI
+                    <input type="text" id="install-domain" value="gateway.example.com" />
+                  </label>
+                  <label>
+                    证书模式
+                    <select id="install-cert-mode">
+                      <option value="acme">ACME 自动申请</option>
+                      <option value="existing">已有证书复用</option>
+                      <option value="self-signed">自签证书</option>
+                    </select>
+                  </label>
+                  <label class="full">
+                    传输参数
+                    <textarea rows="4" id="install-notes">UUID: auto-generate
+Short ID: auto-generate
+Path: /edge
+Reality SNI: www.microsoft.com</textarea>
+                  </label>
+                  <label>
+                    核心
+                    <select id="install-core">
+                      <option value="Xray">Xray</option>
+                      <option value="Sing-box">Sing-box</option>
+                    </select>
+                  </label>
+                  <label>
+                    传输
+                    <input type="text" id="install-transport" value="reality" />
+                  </label>
+                </form>
+
+                <div class="info-stack">
+                  <article class="mini-card accent-blue">
+                    <h4>安装向导映射</h4>
+                    <p>对应脚本里的 `do_install_server -> gen_*_server_config -> start_services`。</p>
+                  </article>
+                  <article class="mini-card">
+                    <h4>推荐协议</h4>
+                    <ul>
+                      <li>VLESS + Reality 适合默认首选</li>
+                      <li>Hy2 / TUIC 适合 QUIC 场景</li>
+                      <li>WS 类协议便于 CDN 转发</li>
+                    </ul>
+                  </article>
+                  <button class="primary-btn" id="install-submit-btn">提交安装</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="section" id="core">
+              <div class="table-shell">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>核心</th>
+                      <th>当前版本</th>
+                      <th>目标版本</th>
+                      <th>通道</th>
+                      <th>动作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="core-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="section" id="uninstall">
+              <div class="table-shell">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>协议</th>
+                      <th>核心</th>
+                      <th>端口</th>
+                      <th>共享服务</th>
+                      <th>状态</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="protocol-table-body"></tbody>
+                </table>
+              </div>
+
+              <div class="warning-box">
+                <strong>注意</strong>
+                <p>这里的 UI 预留了“按协议卸载”和“按端口实例卸载”两种入口，方便适配脚本里的多端口模式。</p>
+              </div>
+            </section>
+
+            <section class="section" id="users">
+              <div class="cards-3">
+                <article class="metric-card">
+                  <span>活跃用户</span>
+                  <strong id="users-total">0</strong>
+                  <small>本地面板数据</small>
+                </article>
+                <article class="metric-card">
+                  <span>流量超额</span>
+                  <strong id="users-warning">0</strong>
+                  <small>warning / disabled</small>
+                </article>
+                <article class="metric-card">
+                  <span>即将到期</span>
+                  <strong id="users-expiring">0</strong>
+                  <small>到期字段可继续细化</small>
+                </article>
+              </div>
+
+              <form class="form-grid compact-form">
+                <label>
+                  用户名
+                  <input type="text" id="user-name" value="demo-user" />
+                </label>
+                <label>
+                  协议
+                  <input type="text" id="user-protocol" value="vless" />
+                </label>
+                <label>
+                  端口
+                  <input type="text" id="user-port" value="443" />
+                </label>
+                <label>
+                  配额(GB)
+                  <input type="text" id="user-quota" value="100" />
+                </label>
+                <label>
+                  到期日
+                  <input type="date" id="user-expire" value="2026-04-20" />
+                </label>
+                <label>
+                  状态
+                  <select id="user-status">
+                    <option value="enabled">enabled</option>
+                    <option value="warning">warning</option>
+                    <option value="disabled">disabled</option>
+                  </select>
+                </label>
+              </form>
+              <div class="inline-actions">
+                <button class="primary-btn" id="user-create-btn">新增用户</button>
+              </div>
+
+              <div class="table-shell">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>用户名</th>
+                      <th>协议</th>
+                      <th>端口</th>
+                      <th>已用流量</th>
+                      <th>配额</th>
+                      <th>到期时间</th>
+                      <th>状态</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="user-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="section" id="subscription">
+              <div class="section-layout">
+                <div class="info-stack">
+                  <article class="mini-card accent-gold">
+                    <h4>订阅入口</h4>
+                    <p>聚合脚本里的 `gen_v2ray_sub / gen_clash_sub / gen_surge_sub` 三种输出。</p>
+                  </article>
+                  <article class="mini-card">
+                    <h4>UUID</h4>
+                    <code id="subscription-uuid">等待加载</code>
+                  </article>
+                </div>
+
+                <form class="form-grid">
+                  <label>
+                    订阅名称
+                    <input type="text" id="subscription-name" value="Main Server Bundle" />
+                  </label>
+                  <label>
+                    默认格式
+                    <select id="subscription-format">
+                      <option value="v2ray">V2Ray</option>
+                      <option value="clash">Clash</option>
+                      <option value="surge">Surge</option>
+                    </select>
+                  </label>
+                  <label class="full">
+                    订阅链接
+                    <textarea rows="4" id="subscription-links"></textarea>
+                  </label>
+                </form>
+                <div class="inline-actions">
+                  <button class="primary-btn" id="subscription-reset-btn">重置订阅 UUID</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="section" id="routing">
+              <div class="cards-3">
+                <article class="metric-card">
+                  <span>分流规则</span>
+                  <strong id="routing-total">0</strong>
+                  <small>global + user based</small>
+                </article>
+                <article class="metric-card">
+                  <span>链式节点</span>
+                  <strong>2</strong>
+                  <small>可继续接脚本订阅导入</small>
+                </article>
+                <article class="metric-card">
+                  <span>负载均衡</span>
+                  <strong>1</strong>
+                  <small>本地演示数据</small>
+                </article>
+              </div>
+
+              <form class="form-grid compact-form">
+                <label>
+                  规则类型
+                  <input type="text" id="routing-type" value="domain" />
+                </label>
+                <label>
+                  目标
+                  <input type="text" id="routing-target" value="example.com" />
+                </label>
+                <label>
+                  出口
+                  <input type="text" id="routing-outbound" value="warp" />
+                </label>
+                <label>
+                  IP 策略
+                  <input type="text" id="routing-ip-strategy" value="prefer_ipv4" />
+                </label>
+                <label>
+                  优先级
+                  <input type="text" id="routing-priority" value="40" />
+                </label>
+              </form>
+              <div class="inline-actions">
+                <button class="primary-btn" id="routing-add-btn">新增规则</button>
+              </div>
+
+              <div class="table-shell">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>规则类型</th>
+                      <th>目标</th>
+                      <th>出口</th>
+                      <th>IP 策略</th>
+                      <th>优先级</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="routing-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div class="panel panel-side">
+            <div class="panel-head">
+              <div>
+                <p class="panel-kicker">Quick View</p>
+                <h3>运行概览</h3>
+              </div>
+            </div>
+
+            <div class="timeline">
+              <div id="timeline-list"></div>
+            </div>
+
+            <div class="panel-divider"></div>
+
+            <div class="command-box">
+              <p class="panel-kicker">Backend Hook</p>
+              <code id="command-preview">bash vless-server.sh</code>
+              <p id="toast-message">面板就绪，等待加载数据。</p>
+              <p>
+                当前前端保留命令预览区域，后续可把按钮事件直接对接到脚本命令或后端 API。
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
