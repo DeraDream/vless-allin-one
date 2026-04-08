@@ -363,6 +363,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data = ADAPTER.list_core_versions()
             elif path == "/api/users":
                 data = ADAPTER.list_users()
+            elif path == "/api/users/share":
+                user_id = (query.get("id") or [""])[0]
+                data = ADAPTER.user_share_link(user_id)
             elif path == "/api/subscriptions":
                 data = ADAPTER.list_subscriptions()
             elif path == "/api/routing":
@@ -380,6 +383,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
         except Exception as exc:
             self.respond_json({"ok": False, "message": str(exc)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if isinstance(data, dict) and "ok" in data and "data" not in data:
+            status = HTTPStatus.OK if data.get("ok") else HTTPStatus.BAD_REQUEST
+            self.respond_json(data, status=status)
             return
         self.respond_json({"ok": True, "data": data})
 

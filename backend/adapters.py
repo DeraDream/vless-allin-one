@@ -29,6 +29,9 @@ class BaseAdapter:
     def uninstall_core(self, name: str) -> Dict[str, Any]:
         raise NotImplementedError
 
+    def user_share_link(self, user_id: Any) -> Dict[str, Any]:
+        raise NotImplementedError
+
 
 class MockAdapter(BaseAdapter):
     def __init__(self, store: PanelStore) -> None:
@@ -204,6 +207,29 @@ class MockAdapter(BaseAdapter):
             conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
             self.store.log(conn, "user-delete", f"Deleted user {row['username']} in mock mode")
         return {"ok": True, "message": "用户已删除"}
+
+    def user_share_link(self, user_id: Any) -> Dict[str, Any]:
+        user_id = int(user_id)
+        with self.store.connect() as conn:
+            row = conn.execute(
+                "SELECT username, protocol, port FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+        if not row:
+            return {"ok": False, "message": "用户不存在"}
+        link = (
+            f"vless://{uuid.uuid4()}@127.0.0.1:{row['port']}"
+            f"?encryption=none&security=reality&type=tcp&sni=www.microsoft.com"
+            f"&fp=chrome&pbk=mock-public-key&sid=abcd1234#mock-{row['username']}"
+        )
+        return {
+            "ok": True,
+            "message": "用户分享链接已生成",
+            "id": str(user_id),
+            "username": row["username"],
+            "protocol": row["protocol"],
+            "link": link,
+        }
 
     def list_subscriptions(self) -> List[Dict[str, Any]]:
         with self.store.connect() as conn:
@@ -449,6 +475,9 @@ class LiveAdapter(BaseAdapter):
 
     def delete_user(self, user_id: Any) -> Dict[str, Any]:
         return self._run("user-delete", {"id": user_id})
+
+    def user_share_link(self, user_id: Any) -> Dict[str, Any]:
+        return self._run("user-share", {"id": user_id})
 
     def reset_subscription_uuid(self, sub_id: Any) -> Dict[str, Any]:
         return self._run("subscription-reset", {"id": sub_id})

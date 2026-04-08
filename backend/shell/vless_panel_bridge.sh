@@ -531,6 +531,31 @@ panel_delete_user() {
   json_ok "用户 $username 已从脚本数据库删除"
 }
 
+panel_user_share() {
+  local identifier core protocol username credential stats_line
+  identifier="$(payload_get id)"
+  core="$(printf '%s' "$identifier" | cut -d'|' -f1)"
+  protocol="$(printf '%s' "$identifier" | cut -d'|' -f2)"
+  username="$(printf '%s' "$identifier" | cut -d'|' -f3)"
+  [[ -z "$core" || -z "$protocol" || -z "$username" ]] && { json_fail "用户标识无效"; exit 1; }
+
+  stats_line="$(
+    db_get_users_stats "$core" "$protocol" 2>/dev/null \
+      | awk -F'|' -v user="$username" '$1 == user { print; exit }'
+  )"
+  [[ -z "$stats_line" ]] && { json_fail "用户不存在"; exit 1; }
+
+  credential="$(printf '%s' "$stats_line" | cut -d'|' -f2)"
+  [[ -z "$credential" ]] && { json_fail "用户凭证不存在"; exit 1; }
+
+  local link
+  link="$(_gen_user_share_link "$core" "$protocol" "$credential" "$username" 2>/dev/null || true)"
+  [[ -z "$link" ]] && { json_fail "当前协议暂不支持导出分享链接"; exit 1; }
+
+  jq -n --arg id "$identifier" --arg username "$username" --arg protocol "$protocol" --arg link "$link" \
+    '{ok:true,message:"用户分享链接已生成",id:$id,username:$username,protocol:$protocol,link:$link}'
+}
+
 panel_reset_subscription() {
   local new_uuid
   new_uuid="$(reset_sub_uuid 2>/dev/null || true)"
@@ -900,6 +925,7 @@ case "$command" in
   core-uninstall) panel_uninstall_core ;;
   user-create) panel_create_user ;;
   user-delete) panel_delete_user ;;
+  user-share) panel_user_share ;;
   reload-services) panel_reload_services ;;
   subscription-update) panel_update_subscription ;;
   subscription-reset) panel_reset_subscription ;;

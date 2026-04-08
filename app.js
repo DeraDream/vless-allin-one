@@ -579,6 +579,16 @@ function notify(message) {
   }
 }
 
+function setButtonLoading(button, loading, loadingText = "\u5904\u7406\u4e2d...", idleText = "") {
+  if (!button) return;
+  if (!button.dataset.idleText) {
+    button.dataset.idleText = idleText || button.textContent;
+  }
+  button.disabled = loading;
+  button.classList.toggle("is-loading", loading);
+  button.textContent = loading ? loadingText : button.dataset.idleText;
+}
+
 function badgeClass(status) {
   if (status === "running" || status === "enabled") return "green";
   if (status === "warning" || status === "manual") return "amber";
@@ -729,7 +739,12 @@ function renderUsers() {
           <td>${Number(item.quota_gb).toFixed(1)} GB</td>
           <td>${escapeHtml(item.expire_at)}</td>
           <td><span class="badge ${badgeClass(item.status)}">${escapeHtml(textOfStatus(item.status))}</span></td>
-          <td><button class="danger-btn" data-user-delete-id="${escapeHtml(item.id)}">\u5220\u9664</button></td>
+          <td>
+            <div class="row-actions">
+              <button class="ghost-btn" data-user-share-id="${escapeHtml(item.id)}">\u5bfc\u51fa\u94fe\u63a5</button>
+              <button class="danger-btn" data-user-delete-id="${escapeHtml(item.id)}">\u5220\u9664</button>
+            </div>
+          </td>
         </tr>
       `
     )
@@ -1001,6 +1016,20 @@ async function createUser() {
   await refreshAll();
 }
 
+async function exportUserShareLink(userId) {
+  const result = await api(`/api/users/share?id=${encodeURIComponent(userId)}`);
+  const link = result.link || "";
+  if (!link) {
+    throw new Error("\u6ca1\u6709\u751f\u6210\u53ef\u7528\u94fe\u63a5");
+  }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(link);
+    notify(`\u5df2\u590d\u5236 ${result.username} \u7684\u94fe\u63a5`);
+    return;
+  }
+  window.prompt("\u8bf7\u590d\u5236\u7528\u6237\u94fe\u63a5", link);
+}
+
 async function addRouting() {
   const payload = {
     rule_type: requireValue("routing-type", "\u89c4\u5219\u7c7b\u578b"),
@@ -1057,6 +1086,7 @@ document.addEventListener("click", async (event) => {
   const coreUpdateTarget = trigger.dataset.coreUpdateTarget;
   const coreUninstallName = trigger.dataset.coreUninstallName;
   const userDeleteId = trigger.dataset.userDeleteId;
+  const userShareId = trigger.dataset.userShareId;
   const routingDeleteId = trigger.dataset.routingDeleteId;
 
   try {
@@ -1081,15 +1111,18 @@ document.addEventListener("click", async (event) => {
     } else if (coreUninstallName) {
       if (!window.confirm(`\u786e\u8ba4\u5378\u8f7d ${coreUninstallName} \u5417\uff1f`)) return;
       const result = await api("/api/core/uninstall", {
-        method: "POST",
-        body: JSON.stringify({ name: coreUninstallName }),
-      });
-      notify(result.message);
-      await refreshAll();
-      await fetchServerLogs();
-    } else if (userDeleteId) {
-      if (!window.confirm("\u786e\u8ba4\u5220\u9664\u8fd9\u4e2a\u7528\u6237\u5417\uff1f")) return;
-      const result = await api("/api/users", {
+          method: "POST",
+          body: JSON.stringify({ name: coreUninstallName }),
+        });
+        notify(result.message);
+        await refreshAll();
+        await fetchServerLogs();
+      } else if (userShareId) {
+        setButtonLoading(trigger, true, "\u751f\u6210\u4e2d...");
+        await exportUserShareLink(userShareId);
+      } else if (userDeleteId) {
+        if (!window.confirm("\u786e\u8ba4\u5220\u9664\u8fd9\u4e2a\u7528\u6237\u5417\uff1f")) return;
+        const result = await api("/api/users", {
         method: "DELETE",
         body: JSON.stringify({ id: userDeleteId }),
       });
@@ -1104,12 +1137,16 @@ document.addEventListener("click", async (event) => {
       });
       notify(result.message);
       await refreshAll();
-      await fetchServerLogs();
+        await fetchServerLogs();
+      }
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      if (userShareId) {
+        setButtonLoading(trigger, false);
+      }
     }
-  } catch (error) {
-    notify(error.message);
-  }
-});
+  });
 
 menuItems.forEach((item) => {
   item.addEventListener("click", () => setActiveSection(item.dataset.section));
@@ -1154,10 +1191,15 @@ document.getElementById("install-submit-btn").addEventListener("click", async ()
 });
 
 document.getElementById("user-create-btn").addEventListener("click", async () => {
+  const button = document.getElementById("user-create-btn");
   try {
+    setButtonLoading(button, true, "\u521b\u5efa\u4e2d...");
+    notify("\u6b63\u5728\u521b\u5efa\u7528\u6237\u5e76\u4e0b\u53d1\u914d\u7f6e...");
     await createUser();
   } catch (error) {
     notify(error.message);
+  } finally {
+    setButtonLoading(button, false);
   }
 });
 
