@@ -1,5 +1,6 @@
 import json
 import os
+import glob
 import subprocess
 import uuid
 from datetime import datetime
@@ -329,7 +330,7 @@ class LiveAdapter(BaseAdapter):
             check=False,
         )
         if proc.returncode != 0:
-            return [
+            journal_lines = [
                 {
                     "time": "",
                     "source": "system",
@@ -337,18 +338,43 @@ class LiveAdapter(BaseAdapter):
                     "message": proc.stderr.strip() or "journalctl 日志读取失败",
                 }
             ]
+        else:
+            journal_lines = []
+            for raw in (proc.stdout or "").splitlines():
+                line = raw.strip()
+                if not line:
+                    continue
+                parts = line.split()
+                timestamp = " ".join(parts[:2]) if len(parts) >= 2 else ""
+                source = parts[2] if len(parts) >= 3 else "server"
+                message = " ".join(parts[4:]) if len(parts) >= 5 else line
+                level = "error" if "error" in line.lower() or "failed" in line.lower() else "info"
+                journal_lines.append({"time": timestamp, "source": source, "level": level, "message": message})
 
-        lines = []
-        for raw in (proc.stdout or "").splitlines():
-            line = raw.strip()
-            if not line:
+        file_lines: List[Dict[str, Any]] = []
+        for path in glob.glob("/var/log/vless/*.log"):
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+                    tail = handle.readlines()[-40:]
+            except OSError:
                 continue
-            parts = line.split()
-            timestamp = " ".join(parts[:2]) if len(parts) >= 2 else ""
-            source = parts[2] if len(parts) >= 3 else "server"
-            message = " ".join(parts[4:]) if len(parts) >= 5 else line
-            level = "error" if "error" in line.lower() or "failed" in line.lower() else "info"
-            lines.append({"time": timestamp, "source": source, "level": level, "message": message})
+            source = os.path.basename(path)
+            for raw in tail:
+                line = raw.strip()
+                if not line:
+                    continue
+                level = "error" if "error" in line.lower() or "failed" in line.lower() else "info"
+                file_lines.append({"time": "", "source": source, "level": level, "message": line})
+        lines = []
+        for item in journal_lines + file_lines:
+            source = str(item.get("source", "")).lower()
+            message = str(item.get("message", "")).lower()
+            if source == "install-task" or source.startswith("install-progress"):
+                continue
+            if "__progress__" in message:
+                continue
+            lines.append(item)
+
         return lines[-int(limit):]
 
     def meta(self) -> Dict[str, Any]:

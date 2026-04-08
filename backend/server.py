@@ -14,6 +14,7 @@ from backend.store import PanelStore
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNTIME_DIR = os.path.join(ROOT_DIR, "runtime")
+LOG_DIR = os.environ.get("PANEL_LOG_DIR", "/var/log/vless")
 STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -63,6 +64,19 @@ class InstallTaskManager:
     def _snapshot(self):
         return json.loads(json.dumps(self._status))
 
+    def _write_runtime_log(self, source: str, message: str) -> None:
+        text = (message or "").strip()
+        if not text:
+            return
+        try:
+            os.makedirs(LOG_DIR, exist_ok=True)
+            safe_source = "".join(ch if ch.isalnum() or ch in ("-", "_") else "-" for ch in source).strip("-") or "panel"
+            log_path = os.path.join(LOG_DIR, f"{safe_source}.log")
+            with open(log_path, "a", encoding="utf-8") as handle:
+                handle.write(f"{self._now()} {text}\n")
+        except OSError:
+            pass
+
     def _append_event(self, text: str, level: str = "info") -> None:
         self._status["events"] = (
             self._status.get("events", [])
@@ -74,6 +88,7 @@ class InstallTaskManager:
         self._status["progress"] = max(0, min(100, int(progress)))
         self._status["message"] = message
         self._append_event(message, level=level)
+        self._write_runtime_log("install-progress", message)
 
     def status(self):
         with self._lock:
@@ -141,6 +156,7 @@ class InstallTaskManager:
         else:
             with open(os.path.join(backup_dir, "cfg-missing.marker"), "w", encoding="utf-8") as handle:
                 handle.write("missing")
+        self._write_runtime_log("install-runtime", f"backup created: {backup_dir}")
         return backup_dir
 
     def _clear_live_cache(self) -> None:
@@ -168,6 +184,7 @@ class InstallTaskManager:
             self.adapter.reload_services()
         except Exception:
             pass
+        self._write_runtime_log("install-runtime", "backup restored and services reloaded")
 
     def _clear_backup(self, backup_dir) -> None:
         if backup_dir and os.path.isdir(backup_dir):
@@ -229,6 +246,8 @@ class InstallTaskManager:
                     last_progress = min(last_progress + 16, 92)
                     with self._lock:
                         self._set_progress(last_progress, progress_text)
+                else:
+                    self._write_runtime_log("install-runtime", line)
                 continue
 
             if process.poll() is not None:
@@ -238,6 +257,12 @@ class InstallTaskManager:
 
         stdout = process.stdout.read().strip() if process.stdout else ""
         stderr_rest = process.stderr.read().strip() if process.stderr else ""
+        if stderr_rest:
+            for line in stderr_rest.splitlines():
+                self._write_runtime_log("install-runtime", line)
+        if stdout:
+            for line in stdout.splitlines():
+                self._write_runtime_log("install-runtime", line)
 
         if self._cancel_event.is_set():
             raise RuntimeError("__cancelled__")
@@ -282,6 +307,7 @@ class InstallTaskManager:
                     error=str(exc),
                     level="error",
                 )
+                self._write_runtime_log("install-runtime", f"install failed: {exc}")
 
 
 INSTALL_MANAGER = InstallTaskManager(ADAPTER)
@@ -341,19 +367,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data = INSTALL_MANAGER.status()
             elif path == "/api/logs":
                 limit = int((query.get("limit") or ["120"])[0])
-                install_status = INSTALL_MANAGER.status()
-                install_lines = [
-                    {
-                        "time": item.get("time", ""),
-                        "source": "install-task",
-                        "level": item.get("level", "info"),
-                        "message": item.get("text", ""),
-                    }
-                    for item in install_status.get("events", [])
-                ]
                 data = {
-                    "lines": (ADAPTER.read_logs(limit) + install_lines)[-limit:],
-                    "install": install_status,
+                    "lines": ADAPTER.read_logs(limit),
+                    "install": INSTALL_MANAGER.status(),
                 }
             else:
                 self.send_error(HTTPStatus.NOT_FOUND, "API not found")
