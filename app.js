@@ -923,15 +923,15 @@ async function fetchInstallStatus() {
   state.installStatus = status;
   renderInstallStatus(status);
 
-  if (status.running) {
-    startInstallPolling();
-  } else {
-    stopInstallPolling();
-    if (previous.running && (status.state === "success" || status.state === "cancelled" || status.state === "error")) {
-      await refreshAll();
-      notify(status.error || status.message || "\u5b89\u88c5\u4efb\u52a1\u5df2\u7ed3\u675f");
+    if (status.running) {
+      startInstallPolling();
+    } else {
+      stopInstallPolling();
+      if (previous.running && (status.state === "success" || status.state === "cancelled" || status.state === "error")) {
+        await Promise.all([refreshAll(), fetchServerLogs()]);
+        notify(status.error || status.message || "\u5b89\u88c5\u4efb\u52a1\u5df2\u7ed3\u675f");
+      }
     }
-  }
 
   return status;
 }

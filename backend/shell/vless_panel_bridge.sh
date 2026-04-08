@@ -783,6 +783,42 @@ emit_routing() {
       })' "$DB_FILE"
 }
 
+panel_delete_routing_stable() {
+  local rule_id
+  rule_id="$(payload_get id)"
+  [[ -z "$rule_id" ]] && { json_fail "瑙勫垯鏍囪瘑鏃犳晥"; exit 1; }
+
+  if [[ "$rule_id" =~ ^row-([0-9]+)$ ]]; then
+    local row_index tmp_file
+    row_index="${BASH_REMATCH[1]}"
+    tmp_file="$(mktemp)"
+    jq --argjson row "$row_index" \
+      '.routing_rules = [(.routing_rules // []) | to_entries[] | select((.key + 1) != $row) | .value]' \
+      "$DB_FILE" > "$tmp_file" || {
+        rm -f "$tmp_file"
+        json_fail "鍒嗘祦瑙勫垯鍒犻櫎澶辫触"
+        exit 1
+      }
+    mv "$tmp_file" "$DB_FILE"
+  else
+    db_del_routing_rule "$rule_id" >/dev/null 2>&1 || {
+      local tmp_file
+      tmp_file="$(mktemp)"
+      jq --arg rid "$rule_id" \
+        '.routing_rules = [(.routing_rules // [])[] | select((.id // "") != $rid)]' \
+        "$DB_FILE" > "$tmp_file" || {
+          rm -f "$tmp_file"
+          json_fail "鍒嗘祦瑙勫垯鍒犻櫎澶辫触"
+          exit 1
+        }
+      mv "$tmp_file" "$DB_FILE"
+    }
+  fi
+
+  panel_reload_all_routing
+  json_ok "鍒嗘祦瑙勫垯宸蹭粠鑴氭湰鏁版嵁搴撳垹闄?"
+}
+
 case "$command" in
   dashboard) emit_dashboard ;;
   protocols) emit_protocols ;;
@@ -800,7 +836,7 @@ case "$command" in
   subscription-update) panel_update_subscription ;;
   subscription-reset) panel_reset_subscription ;;
   routing-add) panel_add_routing ;;
-  routing-delete) panel_delete_routing ;;
+  routing-delete) panel_delete_routing_stable ;;
   *)
     json_fail "unsupported live bridge command"
     exit 1
