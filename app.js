@@ -212,6 +212,13 @@ function ensureInstallStatusCard() {
       <span id="install-status-progress-bar"></span>
     </div>
     <p class="install-status-error" id="install-status-error" hidden></p>
+    <div class="install-error-tools" id="install-error-tools" hidden>
+      <div class="install-error-tools-head">
+        <strong>可复制的完整错误日志块</strong>
+        <button type="button" class="ghost-btn small-btn" data-copy-install-error-log="true">复制日志块</button>
+      </div>
+      <textarea id="install-error-log-block" rows="10" readonly></textarea>
+    </div>
     <div class="install-status-events" id="install-status-events">
       <p class="install-status-empty">\u672a\u68c0\u6d4b\u5230\u5b89\u88c5\u8fdb\u5ea6\u8bb0\u5f55</p>
     </div>
@@ -509,6 +516,8 @@ function renderInstallStatus(status) {
   const message = document.getElementById("install-status-message");
   const progressBar = document.getElementById("install-status-progress-bar");
   const error = document.getElementById("install-status-error");
+  const errorTools = document.getElementById("install-error-tools");
+  const errorLogBlock = document.getElementById("install-error-log-block");
   const events = document.getElementById("install-status-events");
 
   if (!title || !badge || !progressText || !message || !progressBar || !error || !events) return;
@@ -529,6 +538,16 @@ function renderInstallStatus(status) {
     error.textContent = "";
   }
 
+  const hasError = Boolean(status.error || status.state === "error");
+  if (errorTools && errorLogBlock) {
+    errorTools.hidden = !hasError;
+    if (hasError) {
+      errorLogBlock.value = buildInstallErrorLogBlock(status);
+    } else {
+      errorLogBlock.value = "";
+    }
+  }
+
   const recentEvents = Array.isArray(status.events) ? status.events.slice().reverse().slice(0, 5) : [];
   events.innerHTML = recentEvents.length
     ? recentEvents
@@ -545,6 +564,51 @@ function renderInstallStatus(status) {
 
   updateInstallButton();
   syncInstallFieldState();
+}
+
+function buildInstallErrorLogBlock(status) {
+  const headerLines = [
+    `[status] state=${status.state || ""}, protocol=${status.protocol || ""}, progress=${Number(status.progress || 0)}%`,
+    `[message] ${status.message || ""}`,
+    `[error] ${status.error || ""}`,
+    "",
+    "[events]",
+  ];
+  const eventLines = (Array.isArray(status.events) ? status.events : []).map(
+    (item) => `${item.time || ""} [${item.level || "info"}] ${item.text || ""}`
+  );
+
+  const installLogLines = (Array.isArray(state.serverLogs) ? state.serverLogs : [])
+    .filter((item) => {
+      const source = String(item?.source || "").toLowerCase();
+      const message = String(item?.message || "").toLowerCase();
+      return source.includes("install") || message.includes("install");
+    })
+    .slice(-80)
+    .map((item) => `${item.time || ""} ${item.source || "log"} ${item.message || ""}`);
+
+  const lines = [
+    ...headerLines,
+    ...(eventLines.length ? eventLines : ["(empty)"]),
+    "",
+    "[raw-install-logs]",
+    ...(installLogLines.length ? installLogLines : ["(empty)"]),
+  ];
+  return markdownCodeBlock("text", lines.join("\n"));
+}
+
+async function copyInstallErrorLogBlock() {
+  const box = document.getElementById("install-error-log-block");
+  const content = box?.value || "";
+  if (!content.trim()) {
+    throw new Error("当前没有可复制的错误日志");
+  }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(content);
+    notify("已复制完整错误日志块");
+    return;
+  }
+  window.prompt("请复制完整错误日志块", content);
 }
 
 async function api(path, options = {}) {
@@ -1097,6 +1161,9 @@ async function fetchServerLogs() {
   const result = await api("/api/logs?limit=120");
   state.serverLogs = result.lines || [];
   renderServerLogs(result);
+  if (state.installStatus?.state === "error" || state.installStatus?.error) {
+    renderInstallStatus(state.installStatus);
+  }
 }
 
 function startServerLogPolling() {
@@ -1251,6 +1318,15 @@ document.addEventListener("click", async (event) => {
   const closeTrigger = event.target.closest('[data-share-modal-close="true"]');
   if (closeTrigger) {
     closeShareExportModal();
+    return;
+  }
+  const copyInstallErrorTrigger = event.target.closest('[data-copy-install-error-log="true"]');
+  if (copyInstallErrorTrigger) {
+    try {
+      await copyInstallErrorLogBlock();
+    } catch (error) {
+      notify(error.message);
+    }
     return;
   }
   const trigger = event.target.closest("button");

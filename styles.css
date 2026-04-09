@@ -363,6 +363,29 @@ select {
   line-height: 1.6;
 }
 
+.install-error-tools {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(213, 83, 83, 0.22);
+  background: rgba(213, 83, 83, 0.06);
+}
+
+.install-error-tools-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.install-error-tools textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.95);
+}
+
 .install-status-events {
   display: grid;
   gap: 10px;
