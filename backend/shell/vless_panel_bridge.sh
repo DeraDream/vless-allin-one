@@ -39,6 +39,7 @@ json_fail() {
 short_error() {
   local text="${1:-}"
   text="$(printf '%s' "$text" | tr '\r\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')"
+  [[ -z "$text" ]] && text="无输出（可能是系统依赖缺失、包管理器异常或网络不可达）"
   if [[ ${#text} -gt 220 ]]; then
     text="${text:0:220}..."
   fi
@@ -138,9 +139,124 @@ ensure_base_dependencies() {
   command -v openssl >/dev/null 2>&1 || { json_fail "缺少 openssl"; exit 1; }
 }
 
+detect_package_manager() {
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "apt-get"
+    return 0
+  fi
+  if command -v dnf >/dev/null 2>&1; then
+    echo "dnf"
+    return 0
+  fi
+  if command -v yum >/dev/null 2>&1; then
+    echo "yum"
+    return 0
+  fi
+  if command -v apk >/dev/null 2>&1; then
+    echo "apk"
+    return 0
+  fi
+  return 1
+}
+
+install_system_packages() {
+  local pm="$1"
+  shift
+  local pkgs=("$@")
+  local out=""
+  PRECHECK_LAST_ERROR=""
+  case "$pm" in
+    apt-get)
+      run_with_error_capture out env DEBIAN_FRONTEND=noninteractive apt-get update || { PRECHECK_LAST_ERROR="$out"; return 1; }
+      run_with_error_capture out env DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkgs[@]}" || { PRECHECK_LAST_ERROR="$out"; return 1; }
+      ;;
+    dnf)
+      run_with_error_capture out dnf install -y "${pkgs[@]}" || { PRECHECK_LAST_ERROR="$out"; return 1; }
+      ;;
+    yum)
+      run_with_error_capture out yum install -y "${pkgs[@]}" || { PRECHECK_LAST_ERROR="$out"; return 1; }
+      ;;
+    apk)
+      run_with_error_capture out apk add --no-cache "${pkgs[@]}" || { PRECHECK_LAST_ERROR="$out"; return 1; }
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+ensure_cmd_or_install() {
+  local cmd="$1"
+  shift
+  local pm="$1"
+  shift
+  local pkgs=("$@")
+  command -v "$cmd" >/dev/null 2>&1 && return 0
+  [[ -n "$pm" ]] || return 1
+  install_system_packages "$pm" "${pkgs[@]}" || return 1
+  command -v "$cmd" >/dev/null 2>&1
+}
+
+preflight_binary_install() {
+  [[ "${EUID:-0}" -eq 0 ]] || { json_fail "需要 root 权限执行安装（请使用 root 或 sudo）"; exit 1; }
+
+  local arch
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|aarch64|armv7l) ;;
+    *)
+      json_fail "当前架构不支持自动安装核心: $arch"
+      exit 1
+      ;;
+  esac
+
+  mkdir -p /usr/local/bin >/dev/null 2>&1 || true
+  [[ -w /usr/local/bin ]] || { json_fail "/usr/local/bin 不可写，请检查权限"; exit 1; }
+
+  local pm=""
+  pm="$(detect_package_manager || true)"
+  [[ -n "$pm" ]] || { json_fail "未检测到支持的包管理器（apt-get/dnf/yum/apk）"; exit 1; }
+
+  # 核心安装依赖
+  if ! ensure_cmd_or_install curl "$pm" curl; then
+    json_fail "缺少 curl，且自动安装失败: $(short_error "$PRECHECK_LAST_ERROR")"
+    exit 1
+  fi
+  if ! ensure_cmd_or_install unzip "$pm" unzip; then
+    json_fail "缺少 unzip，且自动安装失败: $(short_error "$PRECHECK_LAST_ERROR")"
+    exit 1
+  fi
+  if ! ensure_cmd_or_install tar "$pm" tar; then
+    json_fail "缺少 tar，且自动安装失败: $(short_error "$PRECHECK_LAST_ERROR")"
+    exit 1
+  fi
+
+  # jq/openssl 已在 ensure_base_dependencies 校验，这里补自动安装能力
+  if ! command -v jq >/dev/null 2>&1; then
+    if ! install_system_packages "$pm" jq; then
+      json_fail "缺少 jq，且自动安装失败: $(short_error "$PRECHECK_LAST_ERROR")"
+      exit 1
+    fi
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    if ! install_system_packages "$pm" openssl ca-certificates; then
+      json_fail "缺少 openssl/ca-certificates，且自动安装失败: $(short_error "$PRECHECK_LAST_ERROR")"
+      exit 1
+    fi
+  fi
+
+  local net_out=""
+  if ! run_with_error_capture net_out curl -fsSL --connect-timeout 10 --max-time 20 https://api.github.com/repos/XTLS/Xray-core/releases/latest; then
+    json_fail "无法访问 GitHub API，请检查服务器网络/DNS/防火墙: $(short_error "$net_out")"
+    exit 1
+  fi
+}
+
 ensure_xray_ready() {
   local out=""
   if ! xray_bin >/dev/null 2>&1; then
+    preflight_binary_install
     check_dependencies >/dev/null 2>&1 || true
     if ! run_with_error_capture out install_xray; then
       [[ -n "$out" ]] && printf '%s\n' "$out" >&2
@@ -157,6 +273,7 @@ ensure_xray_ready() {
 ensure_singbox_ready() {
   local out=""
   if ! singbox_bin >/dev/null 2>&1; then
+    preflight_binary_install
     check_dependencies >/dev/null 2>&1 || true
     if ! run_with_error_capture out install_singbox; then
       [[ -n "$out" ]] && printf '%s\n' "$out" >&2
