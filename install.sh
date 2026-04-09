@@ -56,24 +56,24 @@ install_packages() {
   log "安装基础依赖..."
   case "$pm" in
     apt)
-      apt-get update -y
+      apt-get update
       DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        git curl wget python3 python3-venv python3-pip ca-certificates jq openssl
+        git curl wget python3 python3-venv python3-pip ca-certificates jq openssl unzip tar
       if [[ "$REQUIRE_NODE" == "true" ]]; then
         DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs npm || true
       fi
       ;;
     dnf)
-      dnf install -y git curl wget python3 python3-pip ca-certificates jq openssl
+      dnf install -y git curl wget python3 python3-pip ca-certificates jq openssl unzip tar
       [[ "$REQUIRE_NODE" == "true" ]] && dnf install -y nodejs npm || true
       ;;
     yum)
-      yum install -y git curl wget python3 python3-pip ca-certificates jq openssl
+      yum install -y git curl wget python3 python3-pip ca-certificates jq openssl unzip tar
       [[ "$REQUIRE_NODE" == "true" ]] && yum install -y nodejs npm || true
       ;;
     apk)
       apk update
-      apk add --no-cache git curl wget python3 py3-pip ca-certificates jq openssl bash
+      apk add --no-cache git curl wget python3 py3-pip ca-certificates jq openssl bash unzip tar
       [[ "$REQUIRE_NODE" == "true" ]] && apk add --no-cache nodejs npm || true
       ;;
   esac
@@ -101,7 +101,7 @@ verify_environment() {
   log "执行环境检测..."
 
   local required_cmds missing=()
-  required_cmds=(git curl wget python3 jq openssl systemctl bash)
+  required_cmds=(git curl wget python3 jq openssl unzip tar systemctl bash)
 
   for cmd in "${required_cmds[@]}"; do
     command_exists "$cmd" || missing+=("$cmd")
@@ -123,6 +123,29 @@ verify_environment() {
   fi
 
   log "环境检测通过"
+}
+
+check_runtime_write_permissions() {
+  mkdir -p /usr/local/bin
+  [[ -w /usr/local/bin ]] || fail "/usr/local/bin 不可写，请检查权限"
+}
+
+check_github_connectivity() {
+  log "检查核心下载源连通性..."
+  curl -fsSL --connect-timeout 10 --max-time 20 \
+    https://api.github.com/repos/XTLS/Xray-core/releases/latest >/dev/null \
+    || fail "无法访问 Xray 发布源（GitHub API），请检查服务器网络/DNS/防火墙"
+
+  curl -fsSL --connect-timeout 10 --max-time 20 \
+    https://api.github.com/repos/SagerNet/sing-box/releases/latest >/dev/null \
+    || fail "无法访问 Sing-box 发布源（GitHub API），请检查服务器网络/DNS/防火墙"
+}
+
+verify_protocol_install_readiness() {
+  log "执行协议安装前置环境检测..."
+  check_runtime_write_permissions
+  check_github_connectivity
+  log "协议安装环境检测通过"
 }
 
 ensure_systemd() {
@@ -311,6 +334,7 @@ main() {
   ensure_systemd
   install_packages
   verify_environment
+  verify_protocol_install_readiness
   fetch_repo
   prepare_runtime
   write_cli
