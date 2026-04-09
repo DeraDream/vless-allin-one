@@ -198,6 +198,63 @@ ensure_cmd_or_install() {
   command -v "$cmd" >/dev/null 2>&1
 }
 
+diag_append() {
+  local current="$1"
+  local item="$2"
+  if [[ -z "$current" ]]; then
+    printf '%s' "$item"
+  else
+    printf '%s | %s' "$current" "$item"
+  fi
+}
+
+diagnose_xray_install_failure() {
+  local reason=""
+  local arch xarch latest_tag latest_ver api_out asset_url net_out
+
+  for cmd in curl jq unzip tar bash; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      reason="$(diag_append "$reason" "缺少命令:$cmd")"
+    fi
+  done
+
+  [[ -w /usr/local/bin ]] || reason="$(diag_append "$reason" "/usr/local/bin 不可写")"
+
+  arch="$(uname -m 2>/dev/null || echo unknown)"
+  case "$arch" in
+    x86_64) xarch="64" ;;
+    aarch64) xarch="arm64-v8a" ;;
+    armv7l) xarch="arm32-v7a" ;;
+    *)
+      reason="$(diag_append "$reason" "不支持架构:$arch")"
+      xarch=""
+      ;;
+  esac
+
+  api_out=""
+  if ! run_with_error_capture api_out curl -fsSL --connect-timeout 10 --max-time 20 \
+    https://api.github.com/repos/XTLS/Xray-core/releases/latest; then
+    reason="$(diag_append "$reason" "GitHub API 不可达: $(short_error "$api_out")")"
+  else
+    latest_tag="$(printf '%s' "$api_out" | jq -r '.tag_name // empty' 2>/dev/null || true)"
+    latest_ver="${latest_tag#v}"
+    if [[ -z "$latest_ver" || "$latest_ver" == "null" ]]; then
+      reason="$(diag_append "$reason" "无法解析 Xray 最新版本号")"
+    fi
+  fi
+
+  if [[ -n "$xarch" && -n "$latest_ver" ]]; then
+    asset_url="https://github.com/XTLS/Xray-core/releases/download/v${latest_ver}/Xray-linux-${xarch}.zip"
+    net_out=""
+    if ! run_with_error_capture net_out curl -fsSLI --connect-timeout 15 --max-time 30 "$asset_url"; then
+      reason="$(diag_append "$reason" "Xray 资产不可达: $(short_error "$net_out")")"
+    fi
+  fi
+
+  [[ -n "$reason" ]] || reason="安装函数返回非零但无输出（建议手动执行 install_xray 观察实时日志）"
+  printf '%s' "$reason"
+}
+
 preflight_binary_install() {
   [[ "${EUID:-0}" -eq 0 ]] || { json_fail "需要 root 权限执行安装（请使用 root 或 sudo）"; exit 1; }
 
@@ -259,6 +316,7 @@ ensure_xray_ready() {
     preflight_binary_install
     check_dependencies >/dev/null 2>&1 || true
     if ! run_with_error_capture out install_xray; then
+      [[ -z "$(printf '%s' "$out" | tr -d '[:space:]')" ]] && out="$(diagnose_xray_install_failure)"
       [[ -n "$out" ]] && printf '%s\n' "$out" >&2
       json_fail "Xray 安装失败: $(short_error "$out")"
       exit 1
