@@ -74,6 +74,16 @@ class PanelStore:
                     priority INTEGER NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS chain_nodes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE,
+                    type TEXT NOT NULL,
+                    server TEXT NOT NULL,
+                    port INTEGER NOT NULL,
+                    node_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS activity_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     action TEXT NOT NULL,
@@ -157,4 +167,3 @@ class PanelStore:
             "INSERT INTO activity_logs (action, detail, created_at) VALUES (?, ?, ?)",
             (action, detail, datetime.utcnow().isoformat(timespec="seconds")),
         )
-

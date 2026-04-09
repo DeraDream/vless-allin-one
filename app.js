@@ -65,6 +65,7 @@ const state = {
   users: [],
   subscriptions: [],
   routing: [],
+  chainNodes: [],
   userRoutingOptions: [],
   logs: [],
   activeTab: "form",
@@ -413,27 +414,46 @@ function localizeStaticText() {
 
   const routingCards = document.querySelectorAll("#routing .metric-card span");
   routingCards[0].textContent = "\u5206\u6d41\u89c4\u5219";
-  routingCards[1].textContent = "\u94fe\u5f0f\u51fa\u53e3";
+  routingCards[1].textContent = "\u5df2\u5bfc\u5165\u8282\u70b9";
   routingCards[2].textContent = "\u8d1f\u8f7d\u5747\u8861";
   const routingCardSmall = document.querySelectorAll("#routing .metric-card small");
   routingCardSmall[0].textContent = "\u5168\u5c40 + \u7528\u6237\u7ef4\u5ea6";
-  routingCardSmall[1].textContent = "\u540e\u7eed\u53ef\u7ee7\u7eed\u63a5\u811a\u672c\u5bfc\u5165";
-  routingCardSmall[2].textContent = "\u5f53\u524d\u4e3a\u6f14\u793a\u5360\u4f4d\u6570\u636e";
-  const routingLabels = document.querySelectorAll("#routing form label");
-  routingLabels[0].childNodes[0].textContent = "\u89c4\u5219\u7c7b\u578b\n                  ";
-  routingLabels[1].childNodes[0].textContent = "\u81ea\u5b9a\u4e49\u76ee\u6807\n                  ";
-  routingLabels[2].childNodes[0].textContent = "\u51fa\u53e3\u7c7b\u578b\n                  ";
-  routingLabels[3].childNodes[0].textContent = "\u51fa\u53e3\u540d\u79f0\n                  ";
-  routingLabels[4].childNodes[0].textContent = "IP \u7b56\u7565\n                  ";
-  routingLabels[5].childNodes[0].textContent = "\u4f18\u5148\u7ea7\n                  ";
+  routingCardSmall[1].textContent = "\u53ef\u5728\u4e0b\u65b9\u5206\u6d41\u89c4\u5219\u4e2d\u76f4\u63a5\u9009\u62e9";
+  routingCardSmall[2].textContent = "\u57fa\u4e8e\u5f53\u524d\u89c4\u5219\u7edf\u8ba1";
+  const chainImportKind = document.getElementById("chain-import-kind");
+  if (chainImportKind) {
+    chainImportKind.closest("label").childNodes[0].textContent = "\u5bfc\u5165\u65b9\u5f0f\n                      ";
+  }
+  const chainImportContent = document.getElementById("chain-import-content");
+  if (chainImportContent) {
+    chainImportContent.closest("label").childNodes[0].textContent = "\u5bfc\u5165\u5185\u5bb9\n                      ";
+  }
+  const sceneLabel = document.getElementById("routing-scene")?.closest("label");
+  const customLabel = document.getElementById("routing-custom-target")?.closest("label");
+  const outboundModeLabel = document.getElementById("routing-outbound-mode")?.closest("label");
+  const outboundNameLabel = document.getElementById("routing-outbound-name")?.closest("label");
+  const chainNodeLabel = document.getElementById("routing-chain-node")?.closest("label");
+  const ipStrategyLabel = document.getElementById("routing-ip-strategy")?.closest("label");
+  const priorityLabel = document.getElementById("routing-priority")?.closest("label");
+  if (sceneLabel) sceneLabel.childNodes[0].textContent = "\u89c4\u5219\u7c7b\u578b\n                  ";
+  if (customLabel) customLabel.childNodes[0].textContent = "\u81ea\u5b9a\u4e49\u76ee\u6807\n                  ";
+  if (outboundModeLabel) outboundModeLabel.childNodes[0].textContent = "\u51fa\u53e3\u7c7b\u578b\n                  ";
+  if (outboundNameLabel) outboundNameLabel.childNodes[0].textContent = "\u51fa\u53e3\u540d\u79f0\n                  ";
+  if (chainNodeLabel) chainNodeLabel.childNodes[0].textContent = "\u94fe\u5f0f\u8282\u70b9\n                  ";
+  if (ipStrategyLabel) ipStrategyLabel.childNodes[0].textContent = "IP \u7b56\u7565\n                  ";
+  if (priorityLabel) priorityLabel.childNodes[0].textContent = "\u4f18\u5148\u7ea7\n                  ";
+  const chainImportBtn = document.getElementById("chain-import-btn");
+  if (chainImportBtn) chainImportBtn.textContent = "\u5bfc\u5165\u8282\u70b9";
   document.getElementById("routing-add-btn").textContent = "\u65b0\u589e\u89c4\u5219";
-  const routingHeaders = document.querySelectorAll("#routing th");
-  routingHeaders[0].textContent = "\u89c4\u5219\u7c7b\u578b";
-  routingHeaders[1].textContent = "\u76ee\u6807";
-  routingHeaders[2].textContent = "\u51fa\u53e3";
-  routingHeaders[3].textContent = "IP \u7b56\u7565";
-  routingHeaders[4].textContent = "\u4f18\u5148\u7ea7";
-  routingHeaders[5].textContent = "\u64cd\u4f5c";
+  const routingHeaders = document.querySelectorAll("#routing .table-shell th");
+  if (routingHeaders.length >= 6) {
+    routingHeaders[0].textContent = "\u89c4\u5219\u7c7b\u578b";
+    routingHeaders[1].textContent = "\u76ee\u6807";
+    routingHeaders[2].textContent = "\u51fa\u53e3";
+    routingHeaders[3].textContent = "IP \u7b56\u7565";
+    routingHeaders[4].textContent = "\u4f18\u5148\u7ea7";
+    routingHeaders[5].textContent = "\u64cd\u4f5c";
+  }
 
   document.querySelector(".panel.panel-side .panel-kicker").textContent = "\u670d\u52a1\u5668\u65e5\u5fd7";
   document.querySelector(".panel.panel-side h3").textContent = "\u5b9e\u65f6 SSH \u65e5\u5fd7";
@@ -998,7 +1018,7 @@ function renderSubscriptions() {
 
 function renderRouting() {
   document.getElementById("routing-total").textContent = String(state.routing.length);
-  const chainCount = state.routing.filter((item) => String(item.outbound || "").startsWith("chain:")).length;
+  const chainCount = state.chainNodes.length;
   const balancerCount = state.routing.filter((item) => String(item.outbound || "").startsWith("balancer:")).length;
   const chainEl = document.getElementById("routing-chain-count");
   const balancerEl = document.getElementById("routing-balancer-count");
@@ -1021,8 +1041,37 @@ function renderRouting() {
     .join("");
 }
 
+function renderChainNodes() {
+  const tableBody = document.getElementById("chain-node-table-body");
+  const chainSelect = document.getElementById("routing-chain-node");
+  if (!tableBody || !chainSelect) return;
+
+  tableBody.innerHTML = state.chainNodes.length
+    ? state.chainNodes
+        .map(
+          (node) => `
+            <tr>
+              <td>${escapeHtml(node.name || "-")}</td>
+              <td>${escapeHtml(node.type || "-")}</td>
+              <td>${escapeHtml(`${node.server || "-"}:${node.port || "-"}`)}</td>
+            </tr>
+          `
+        )
+        .join("")
+    : `<tr><td colspan="3">暂无第三方节点，请先导入</td></tr>`;
+
+  const current = chainSelect.value;
+  chainSelect.innerHTML = state.chainNodes.length
+    ? state.chainNodes.map((node) => `<option value="${escapeHtml(node.name)}">${escapeHtml(node.name)}</option>`).join("")
+    : `<option value="">暂无可选节点</option>`;
+  const exists = state.chainNodes.some((node) => node.name === current);
+  if (exists) {
+    chainSelect.value = current;
+  }
+}
+
 async function refreshAll() {
-  const [meta, dashboard, protocols, cores, users, subscriptions, routing] = await Promise.all([
+  const [meta, dashboard, protocols, cores, users, subscriptions, routing, chainNodes] = await Promise.all([
     api("/api/meta"),
     api("/api/dashboard"),
     api("/api/protocols"),
@@ -1030,6 +1079,7 @@ async function refreshAll() {
     api("/api/users"),
     api("/api/subscriptions"),
     api("/api/routing"),
+    api("/api/chain/nodes"),
   ]);
 
   state.meta = meta;
@@ -1042,6 +1092,7 @@ async function refreshAll() {
   state.users = users;
   state.subscriptions = subscriptions;
   state.routing = routing;
+  state.chainNodes = Array.isArray(chainNodes) ? chainNodes : [];
   state.logs = dashboard.logs || [];
 
   updateModeIndicator();
@@ -1051,6 +1102,8 @@ async function refreshAll() {
   renderUsers();
   renderSubscriptions();
   renderRouting();
+  renderChainNodes();
+  syncRoutingFormState();
   renderSectionExecutionLogs();
   notify(`\u9762\u677f\u6570\u636e\u5df2\u540c\u6b65\uff0c\u5f53\u524d\u6a21\u5f0f\uff1a${meta.mode}`);
 }
@@ -1060,16 +1113,36 @@ function syncRoutingFormState() {
   const outboundMode = document.getElementById("routing-outbound-mode")?.value || "direct";
   const customTarget = document.getElementById("routing-custom-target");
   const outboundName = document.getElementById("routing-outbound-name");
+  const outboundNameWrapper = document.getElementById("routing-outbound-name-wrapper");
+  const chainNodeWrapper = document.getElementById("routing-chain-node-wrapper");
+  const chainNodeSelect = document.getElementById("routing-chain-node");
+  const importKind = document.getElementById("chain-import-kind");
+  const importContent = document.getElementById("chain-import-content");
 
   if (customTarget) {
     customTarget.disabled = scene !== "custom";
     if (scene !== "custom") customTarget.value = "";
   }
-  if (outboundName) {
-    const needName = outboundMode === "chain" || outboundMode === "balancer";
-    outboundName.disabled = !needName;
-    outboundName.placeholder = outboundMode === "chain" ? "如: Japan+04" : outboundMode === "balancer" ? "如: 日本节点组" : "该出口不需要名称";
-    if (!needName) outboundName.value = "";
+  if (outboundName && outboundNameWrapper && chainNodeWrapper && chainNodeSelect) {
+    const chainMode = outboundMode === "chain";
+    const balancerMode = outboundMode === "balancer";
+    outboundNameWrapper.hidden = chainMode;
+    chainNodeWrapper.hidden = !chainMode;
+    outboundName.disabled = !balancerMode;
+    outboundName.placeholder = balancerMode ? "如: 日本节点组" : "该出口不需要名称";
+    if (!balancerMode) outboundName.value = "";
+    chainNodeSelect.disabled = !chainMode || state.chainNodes.length === 0;
+    if (chainMode && state.chainNodes.length > 0 && !chainNodeSelect.value) {
+      chainNodeSelect.value = state.chainNodes[0].name;
+    }
+  }
+
+  if (importKind && importContent) {
+    if (importKind.value === "subscription") {
+      importContent.placeholder = "粘贴订阅链接 URL，如: https://example.com/sub";
+    } else {
+      importContent.placeholder = "每行一个分享链接，支持 vless/vmess/trojan/ss/socks5...";
+    }
   }
 }
 
@@ -1289,9 +1362,10 @@ async function addRouting() {
   const customTarget = document.getElementById("routing-custom-target").value.trim();
   const outboundMode = requireValue("routing-outbound-mode", "\u51fa\u53e3\u7c7b\u578b");
   const outboundName = document.getElementById("routing-outbound-name").value.trim();
+  const chainNodeName = document.getElementById("routing-chain-node")?.value?.trim() || "";
   const outbound =
     outboundMode === "chain"
-      ? `chain:${outboundName || requireValue("routing-outbound-name", "\u94fe\u5f0f\u540d\u79f0")}`
+      ? `chain:${chainNodeName || requireValue("routing-chain-node", "\u94fe\u5f0f\u8282\u70b9")}`
       : outboundMode === "balancer"
         ? `balancer:${outboundName || requireValue("routing-outbound-name", "\u8d1f\u8f7d\u5747\u8861\u540d\u79f0")}`
         : outboundMode;
@@ -1308,6 +1382,23 @@ async function addRouting() {
     body: JSON.stringify(payload),
   });
   notify(result.message);
+  await refreshAll();
+}
+
+async function importChainNodes() {
+  const kind = document.getElementById("chain-import-kind")?.value || "link";
+  const content = document.getElementById("chain-import-content")?.value?.trim() || "";
+  if (!content) {
+    throw new Error("导入内容不能为空");
+  }
+  const result = await api("/api/chain/import", {
+    method: "POST",
+    body: JSON.stringify({ kind, content }),
+  });
+  notify(result.message || "节点导入完成");
+  if (kind === "link") {
+    document.getElementById("chain-import-content").value = "";
+  }
   await refreshAll();
 }
 
@@ -1505,6 +1596,18 @@ document.getElementById("routing-add-btn").addEventListener("click", async () =>
     notify(error.message);
   }
 });
+document.getElementById("chain-import-btn")?.addEventListener("click", async () => {
+  const button = document.getElementById("chain-import-btn");
+  try {
+    setButtonLoading(button, true, "\u5bfc\u5165\u4e2d...");
+    await importChainNodes();
+  } catch (error) {
+    notify(error.message);
+  } finally {
+    setButtonLoading(button, false);
+  }
+});
+document.getElementById("chain-import-kind")?.addEventListener("change", syncRoutingFormState);
 document.getElementById("routing-scene")?.addEventListener("change", syncRoutingFormState);
 document.getElementById("routing-outbound-mode")?.addEventListener("change", syncRoutingFormState);
 

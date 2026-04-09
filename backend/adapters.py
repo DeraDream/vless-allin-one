@@ -6,6 +6,7 @@ import subprocess
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from urllib.parse import unquote, urlparse
 
 from .store import PanelStore
 
@@ -32,6 +33,12 @@ class BaseAdapter:
     def user_share_link(self, user_id: Any) -> Dict[str, Any]:
         raise NotImplementedError
 
+    def list_chain_nodes(self) -> List[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def import_chain_nodes(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        raise NotImplementedError
+
 
 class MockAdapter(BaseAdapter):
     def __init__(self, store: PanelStore) -> None:
@@ -47,6 +54,14 @@ class MockAdapter(BaseAdapter):
                 ORDER BY outbound
                 """
             ).fetchall()
+            chain_rows = conn.execute(
+                """
+                SELECT DISTINCT name
+                FROM chain_nodes
+                WHERE name IS NOT NULL AND name <> ''
+                ORDER BY name
+                """
+            ).fetchall()
         options = [
             {"value": "", "label": "全局规则"},
             {"value": "direct", "label": "直连"},
@@ -60,6 +75,9 @@ class MockAdapter(BaseAdapter):
                 options.append({"value": outbound, "label": f"链式: {outbound[6:]}"})
             elif outbound.startswith("balancer:"):
                 options.append({"value": outbound, "label": f"负载均衡: {outbound[9:]}"})
+        for row in chain_rows:
+            node_name = str(row["name"])
+            options.append({"value": f"chain:{node_name}", "label": f"链式: {node_name}"})
 
         uniq = {item["value"]: item for item in options}
         return {
@@ -251,6 +269,79 @@ class MockAdapter(BaseAdapter):
             "protocol": row["protocol"],
             "link": link,
         }
+
+    def list_chain_nodes(self) -> List[Dict[str, Any]]:
+        with self.store.connect() as conn:
+            rows = conn.execute(
+                "SELECT id, name, type, server, port, created_at FROM chain_nodes ORDER BY id DESC"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _parse_chain_link(self, link: str) -> Optional[Dict[str, Any]]:
+        link = (link or "").strip()
+        if "://" not in link:
+            return None
+        if link.startswith("vmess://"):
+            return {
+                "name": f"vmess-{uuid.uuid4().hex[:6]}",
+                "type": "vmess",
+                "server": "unknown",
+                "port": 443,
+                "raw": link,
+            }
+        parsed = urlparse(link)
+        scheme = (parsed.scheme or "").lower()
+        if not scheme:
+            return None
+        name = unquote((parsed.fragment or "").strip()) or f"{scheme}-{uuid.uuid4().hex[:6]}"
+        host = parsed.hostname or ""
+        port = parsed.port or 443
+        if not host:
+            return None
+        node_type = "socks" if scheme in ("socks", "socks5") else scheme
+        return {"name": name, "type": node_type, "server": host, "port": int(port), "raw": link}
+
+    def import_chain_nodes(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        content = str(payload.get("content") or "").strip()
+        if not content:
+            return {"ok": False, "message": "导入内容不能为空"}
+        lines = [line.strip() for line in content.splitlines() if line.strip()]
+        if not lines:
+            lines = [content]
+
+        added = 0
+        skipped = 0
+        failed = 0
+        with self.store.connect() as conn:
+            for line in lines:
+                node = self._parse_chain_link(line)
+                if not node:
+                    failed += 1
+                    continue
+                exists = conn.execute("SELECT 1 FROM chain_nodes WHERE name = ?", (node["name"],)).fetchone()
+                if exists:
+                    skipped += 1
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO chain_nodes (name, type, server, port, node_json, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        node["name"],
+                        node["type"],
+                        node["server"],
+                        int(node["port"]),
+                        json.dumps(node, ensure_ascii=True),
+                        datetime.utcnow().isoformat(timespec="seconds"),
+                    ),
+                )
+                added += 1
+            self.store.log(conn, "chain-import", f"Imported chain nodes: added={added}, skipped={skipped}, failed={failed}")
+
+        if added == 0 and failed > 0:
+            return {"ok": False, "message": "没有可导入的有效节点，请检查分享链接或订阅内容"}
+        return {"ok": True, "message": f"导入完成：新增 {added}，跳过 {skipped}，失败 {failed}"}
 
     def list_subscriptions(self) -> List[Dict[str, Any]]:
         with self.store.connect() as conn:
@@ -508,3 +599,9 @@ class LiveAdapter(BaseAdapter):
 
     def delete_routing(self, rule_id: Any) -> Dict[str, Any]:
         return self._run("routing-delete", {"id": rule_id})
+
+    def list_chain_nodes(self) -> List[Dict[str, Any]]:
+        return self._run("chain-nodes")
+
+    def import_chain_nodes(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._run("chain-import", payload)

@@ -350,6 +350,33 @@ Remark: install from panel</textarea>
                 </article>
               </div>
 
+              <div class="section-layout">
+                <div class="mini-card">
+                  <div class="block-head">
+                    <div>
+                      <h4>第三方节点导入</h4>
+                      <p>先导入第三方节点，再用这些节点创建分流规则。</p>
+                    </div>
+                  </div>
+                  <form class="form-grid compact-form" onsubmit="return false;">
+                    <label>
+                      导入方式
+                      <select id="chain-import-kind">
+                        <option value="link">分享链接（可多行）</option>
+                        <option value="subscription">订阅链接 URL</option>
+                      </select>
+                    </label>
+                    <label class="full">
+                      导入内容
+                      <textarea id="chain-import-content" rows="4" placeholder="支持 vless:// vmess:// trojan:// ss:// socks5:// ... 或订阅 URL"></textarea>
+                    </label>
+                  </form>
+                  <div class="inline-actions">
+                    <button class="ghost-btn" id="chain-import-btn">导入节点</button>
+                  </div>
+                </div>
+              </div>
+
               <form class="form-grid compact-form" onsubmit="return false;">
                 <label>
                   规则类型
@@ -380,9 +407,13 @@ Remark: install from panel</textarea>
                     <option value="balancer">负载均衡</option>
                   </select>
                 </label>
-                <label>
+                <label id="routing-outbound-name-wrapper">
                   出口名称
                   <input type="text" id="routing-outbound-name" value="" placeholder="链式/负载均衡名称" />
+                </label>
+                <label id="routing-chain-node-wrapper" hidden>
+                  链式节点
+                  <select id="routing-chain-node"></select>
                 </label>
                 <label>
                   IP 策略
@@ -416,6 +447,19 @@ Remark: install from panel</textarea>
                     </tr>
                   </thead>
                   <tbody id="routing-table-body"></tbody>
+                </table>
+              </div>
+
+              <div class="table-shell">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>已导入节点</th>
+                      <th>类型</th>
+                      <th>地址</th>
+                    </tr>
+                  </thead>
+                  <tbody id="chain-node-table-body"></tbody>
                 </table>
               </div>
             </section>

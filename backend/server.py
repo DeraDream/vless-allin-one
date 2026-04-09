@@ -449,6 +449,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data = ADAPTER.list_subscriptions()
             elif path == "/api/routing":
                 data = ADAPTER.list_routing()
+            elif path == "/api/chain/nodes":
+                data = ADAPTER.list_chain_nodes()
             elif path == "/api/install/status":
                 data = INSTALL_MANAGER.status()
             elif path == "/api/logs":
@@ -499,6 +501,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 result = ADAPTER.add_routing(payload)
             elif parsed.path == "/api/routing" and method == "DELETE":
                 result = ADAPTER.delete_routing(payload["id"])
+            elif parsed.path == "/api/chain/import" and method == "POST":
+                result = ADAPTER.import_chain_nodes(payload)
             else:
                 self.send_error(HTTPStatus.NOT_FOUND, "API write endpoint not found")
                 return

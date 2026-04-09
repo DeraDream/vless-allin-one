@@ -1205,6 +1205,87 @@ emit_routing() {
       })' "$DB_FILE"
 }
 
+emit_chain_nodes() {
+  db_get_chain_nodes 2>/dev/null | jq -c '
+    map({
+      id: (.name // ""),
+      name: (.name // ""),
+      type: (.type // ""),
+      server: (.server // ""),
+      port: (.port // 0),
+      via_warp: (.via_warp // false)
+    })
+  '
+}
+
+panel_import_chain_nodes() {
+  local kind content source raw_line line node_json name type server port
+  kind="$(payload_get kind)"
+  content="$(payload_get content)"
+  [[ -z "$kind" ]] && kind="auto"
+  [[ -z "$content" ]] && { json_fail "导入内容不能为空"; exit 1; }
+
+  source="$content"
+  if [[ "$kind" == "subscription" ]]; then
+    source="$(fetch_subscription "$content" 2>/dev/null || true)"
+    [[ -z "$source" ]] && { json_fail "订阅获取失败或内容为空"; exit 1; }
+  fi
+
+  local added=0 skipped=0 failed=0
+  local details=""
+
+  while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+    line="$(printf '%s' "$raw_line" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+
+    node_json="$(parse_proxy_link "$line" 2>/dev/null || true)"
+    if [[ -z "$node_json" || "$node_json" == "null" ]]; then
+      node_json="$(parse_share_link "$line" 2>/dev/null || true)"
+    fi
+    if [[ -z "$node_json" || "$node_json" == "null" ]]; then
+      ((failed++))
+      continue
+    fi
+
+    name="$(echo "$node_json" | jq -r '.name // empty' 2>/dev/null)"
+    type="$(echo "$node_json" | jq -r '.type // "node"' 2>/dev/null)"
+    server="$(echo "$node_json" | jq -r '.server // "server"' 2>/dev/null)"
+    port="$(echo "$node_json" | jq -r '.port // 0' 2>/dev/null)"
+    name="$(printf '%s' "$name" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    if [[ -z "$name" ]]; then
+      name="${type}-${server}:${port}"
+    fi
+    node_json="$(echo "$node_json" | jq --arg name "$name" '.name = $name' 2>/dev/null || true)"
+    [[ -z "$node_json" || "$node_json" == "null" ]] && { ((failed++)); continue; }
+
+    if db_chain_node_exists "$name"; then
+      ((skipped++))
+      continue
+    fi
+
+    if db_add_chain_node "$node_json" >/dev/null 2>&1; then
+      ((added++))
+      details="${details}${name}\n"
+    else
+      ((failed++))
+    fi
+  done <<< "$source"
+
+  if [[ $added -eq 0 && $failed -gt 0 ]]; then
+    json_fail "没有导入成功，请检查链接格式或订阅内容"
+    exit 1
+  fi
+
+  local message="导入完成：新增 ${added}，跳过 ${skipped}，失败 ${failed}"
+  jq -n \
+    --arg msg "$message" \
+    --argjson added "$added" \
+    --argjson skipped "$skipped" \
+    --argjson failed "$failed" \
+    --arg detail "$details" \
+    '{ok:true,message:$msg,data:{added:$added,skipped:$skipped,failed:$failed,added_names:($detail|split("\n")|map(select(length>0)))}}'
+}
+
 panel_delete_routing_stable() {
   local rule_id
   rule_id="$(payload_get id)"
@@ -1249,6 +1330,7 @@ case "$command" in
   user-routing-options) emit_user_routing_options ;;
   subscriptions) emit_subscriptions ;;
   routing) emit_routing ;;
+  chain-nodes) emit_chain_nodes ;;
   install) panel_install_protocol ;;
   uninstall) panel_uninstall_protocol ;;
   core-update) panel_update_core ;;
@@ -1261,6 +1343,7 @@ case "$command" in
   subscription-reset) panel_reset_subscription ;;
   routing-add) panel_add_routing ;;
   routing-delete) panel_delete_routing_stable ;;
+  chain-import) panel_import_chain_nodes ;;
   *)
     json_fail "unsupported live bridge command"
     exit 1
