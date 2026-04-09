@@ -38,15 +38,36 @@ class MockAdapter(BaseAdapter):
         self.store = store
 
     def meta(self) -> Dict[str, Any]:
+        with self.store.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT outbound
+                FROM routing_rules
+                WHERE outbound IS NOT NULL AND outbound <> ''
+                ORDER BY outbound
+                """
+            ).fetchall()
+        options = [
+            {"value": "", "label": "全局规则"},
+            {"value": "direct", "label": "直连"},
+            {"value": "warp", "label": "WARP"},
+        ]
+        for row in rows:
+            outbound = str(row["outbound"])
+            if outbound == "direct" or outbound == "warp":
+                continue
+            if outbound.startswith("chain:"):
+                options.append({"value": outbound, "label": f"链式: {outbound[6:]}"})
+            elif outbound.startswith("balancer:"):
+                options.append({"value": outbound, "label": f"负载均衡: {outbound[9:]}"})
+
+        uniq = {item["value"]: item for item in options}
         return {
             "mode": "mock",
             "platform": os.name,
             "cfg_dir": "",
             "live_capable": False,
-            "user_routing_options": [
-                {"value": "", "label": "全局规则"},
-                {"value": "direct", "label": "直连"},
-            ],
+            "user_routing_options": list(uniq.values()),
         }
 
     def dashboard(self) -> Dict[str, Any]:

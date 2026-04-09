@@ -335,20 +335,6 @@ function localizeStaticText() {
   document.querySelector(".status-card p").textContent = "\u5f53\u524d\u6a21\u5f0f";
   document.querySelector(".eyebrow").textContent = "\u591a\u534f\u8bae\u53ef\u89c6\u5316\u63a7\u5236\u9762\u677f";
   document.getElementById("refresh-all-btn").textContent = "\u540c\u6b65\u9762\u677f\u6570\u636e";
-  document.querySelector(".hero-tag").textContent = "Linux \u4e00\u952e\u5b89\u88c5 + \u7ebf\u4e0a\u8fd0\u7ef4";
-  document.querySelector(".hero h3").textContent =
-    "\u628a\u811a\u672c\u80fd\u529b\u76f4\u63a5\u63a5\u6210 Linux \u7ebf\u4e0a\u8fd0\u7ef4\u9762\u677f\uff0c\u652f\u6301\u4e00\u952e\u5b89\u88c5\u548c\u5b9e\u65f6\u65e5\u5fd7\u6392\u969c";
-  document.querySelector(".hero p:not(.hero-tag)").textContent =
-    "\u8fd9\u4e2a\u9762\u677f\u56f4\u7ed5\u5b89\u88c5\u534f\u8bae\u3001\u6838\u5fc3\u7ba1\u7406\u3001\u7528\u6237\u3001\u8ba2\u9605\u548c\u5206\u6d41\u4e94\u7c7b\u64cd\u4f5c\u7ec4\u7ec7\uff0c\u9762\u5411 Linux Live \u6a21\u5f0f\u76f4\u63a5\u7ba1\u7406\u771f\u5b9e\u670d\u52a1\u5668\u811a\u672c\u73af\u5883\u3002";
-
-  const heroLabels = document.querySelectorAll(".hero-stats span");
-  heroLabels[0].textContent = "\u5df2\u5b89\u88c5\u534f\u8bae";
-  heroLabels[1].textContent = "\u7528\u6237\u6570";
-  heroLabels[2].textContent = "\u5206\u6d41\u89c4\u5219";
-  document.getElementById("stat-installed-sub").textContent = "\u7b49\u5f85\u52a0\u8f7d";
-  document.getElementById("stat-users-sub").textContent = "\u7b49\u5f85\u52a0\u8f7d";
-  document.getElementById("stat-routing-sub").textContent = "\u7b49\u5f85\u52a0\u8f7d";
-
   document.querySelector(".panel.panel-wide .panel-kicker").textContent = "\u64cd\u4f5c\u533a";
   menuItems.forEach((item) => {
     const key = item.dataset.section;
@@ -435,10 +421,11 @@ function localizeStaticText() {
   routingCardSmall[2].textContent = "\u5f53\u524d\u4e3a\u6f14\u793a\u5360\u4f4d\u6570\u636e";
   const routingLabels = document.querySelectorAll("#routing form label");
   routingLabels[0].childNodes[0].textContent = "\u89c4\u5219\u7c7b\u578b\n                  ";
-  routingLabels[1].childNodes[0].textContent = "\u76ee\u6807\n                  ";
-  routingLabels[2].childNodes[0].textContent = "\u51fa\u53e3\n                  ";
-  routingLabels[3].childNodes[0].textContent = "IP \u7b56\u7565\n                  ";
-  routingLabels[4].childNodes[0].textContent = "\u4f18\u5148\u7ea7\n                  ";
+  routingLabels[1].childNodes[0].textContent = "\u81ea\u5b9a\u4e49\u76ee\u6807\n                  ";
+  routingLabels[2].childNodes[0].textContent = "\u51fa\u53e3\u7c7b\u578b\n                  ";
+  routingLabels[3].childNodes[0].textContent = "\u51fa\u53e3\u540d\u79f0\n                  ";
+  routingLabels[4].childNodes[0].textContent = "IP \u7b56\u7565\n                  ";
+  routingLabels[5].childNodes[0].textContent = "\u4f18\u5148\u7ea7\n                  ";
   document.getElementById("routing-add-btn").textContent = "\u65b0\u589e\u89c4\u5219";
   const routingHeaders = document.querySelectorAll("#routing th");
   routingHeaders[0].textContent = "\u89c4\u5219\u7c7b\u578b";
@@ -789,8 +776,8 @@ function openShareExportModal(payload) {
     const name = nameInput.value.trim() || fallbackName;
     const namedLink = buildVlessLinkWithName(rawLink, name);
     const yamlNode = buildVlessYamlNode(namedLink, name);
-    nativeMarkdown.value = markdownCodeBlock("txt", namedLink);
-    yamlMarkdown.value = markdownCodeBlock("yaml", yamlNode);
+    nativeMarkdown.value = namedLink;
+    yamlMarkdown.value = yamlNode;
   };
 
   nameInput.value = fallbackName;
@@ -867,16 +854,18 @@ function updateModeIndicator() {
 }
 
 function renderDashboard(data) {
-  document.getElementById("stat-installed").textContent = `${data.stats.installed} \u4e2a\u534f\u8bae`;
-  document.getElementById("stat-installed-sub").textContent = "\u5b89\u88c5\u548c\u5378\u8f7d\u540e\u4f1a\u81ea\u52a8\u5237\u65b0";
-  document.getElementById("stat-users").textContent = `${data.stats.users}`;
-  document.getElementById("stat-users-sub").textContent = `${data.stats.expiring} \u4e2a\u544a\u8b66\u6216\u505c\u7528`;
-  document.getElementById("stat-routing").textContent = `${data.stats.routes} \u6761\u89c4\u5219`;
-  document.getElementById("stat-routing-sub").textContent = "\u5206\u6d41\u6570\u636e\u5df2\u63a5\u901a";
-
+  return data;
 }
 
 function renderProtocols() {
+  document.getElementById("install-total").textContent = String(state.protocols.length);
+  document.getElementById("install-running").textContent = String(
+    state.protocols.filter((item) => item.status === "running" || item.status === "enabled").length
+  );
+  document.getElementById("install-stopped").textContent = String(
+    state.protocols.filter((item) => item.status !== "running" && item.status !== "enabled").length
+  );
+
   const markup = state.protocols
     .map(
       (item) => `
@@ -903,7 +892,11 @@ function renderUserRoutingOptions() {
   const currentValue = select.value;
   const options = Array.isArray(state.userRoutingOptions) && state.userRoutingOptions.length
     ? state.userRoutingOptions
-    : [{ value: "", label: "\u5168\u5c40\u89c4\u5219" }, { value: "direct", label: "\u76f4\u8fde" }];
+    : [
+        { value: "", label: "\u5168\u5c40\u89c4\u5219" },
+        { value: "direct", label: "\u76f4\u8fde" },
+        { value: "warp", label: "WARP" },
+      ];
 
   select.innerHTML = options
     .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
@@ -1005,6 +998,12 @@ function renderSubscriptions() {
 
 function renderRouting() {
   document.getElementById("routing-total").textContent = String(state.routing.length);
+  const chainCount = state.routing.filter((item) => String(item.outbound || "").startsWith("chain:")).length;
+  const balancerCount = state.routing.filter((item) => String(item.outbound || "").startsWith("balancer:")).length;
+  const chainEl = document.getElementById("routing-chain-count");
+  const balancerEl = document.getElementById("routing-balancer-count");
+  if (chainEl) chainEl.textContent = String(chainCount);
+  if (balancerEl) balancerEl.textContent = String(balancerCount);
   const body = document.getElementById("routing-table-body");
   body.innerHTML = state.routing
     .map(
@@ -1054,6 +1053,24 @@ async function refreshAll() {
   renderRouting();
   renderSectionExecutionLogs();
   notify(`\u9762\u677f\u6570\u636e\u5df2\u540c\u6b65\uff0c\u5f53\u524d\u6a21\u5f0f\uff1a${meta.mode}`);
+}
+
+function syncRoutingFormState() {
+  const scene = document.getElementById("routing-scene")?.value || "openai";
+  const outboundMode = document.getElementById("routing-outbound-mode")?.value || "direct";
+  const customTarget = document.getElementById("routing-custom-target");
+  const outboundName = document.getElementById("routing-outbound-name");
+
+  if (customTarget) {
+    customTarget.disabled = scene !== "custom";
+    if (scene !== "custom") customTarget.value = "";
+  }
+  if (outboundName) {
+    const needName = outboundMode === "chain" || outboundMode === "balancer";
+    outboundName.disabled = !needName;
+    outboundName.placeholder = outboundMode === "chain" ? "如: Japan+04" : outboundMode === "balancer" ? "如: 日本节点组" : "该出口不需要名称";
+    if (!needName) outboundName.value = "";
+  }
 }
 
 function syncInstallDefaults() {
@@ -1268,10 +1285,21 @@ async function exportUserShareLink(userId) {
 }
 
 async function addRouting() {
+  const scene = requireValue("routing-scene", "\u89c4\u5219\u7c7b\u578b");
+  const customTarget = document.getElementById("routing-custom-target").value.trim();
+  const outboundMode = requireValue("routing-outbound-mode", "\u51fa\u53e3\u7c7b\u578b");
+  const outboundName = document.getElementById("routing-outbound-name").value.trim();
+  const outbound =
+    outboundMode === "chain"
+      ? `chain:${outboundName || requireValue("routing-outbound-name", "\u94fe\u5f0f\u540d\u79f0")}`
+      : outboundMode === "balancer"
+        ? `balancer:${outboundName || requireValue("routing-outbound-name", "\u8d1f\u8f7d\u5747\u8861\u540d\u79f0")}`
+        : outboundMode;
+
   const payload = {
-    rule_type: requireValue("routing-type", "\u89c4\u5219\u7c7b\u578b"),
-    target: requireValue("routing-target", "\u76ee\u6807"),
-    outbound: requireValue("routing-outbound", "\u51fa\u53e3"),
+    rule_type: scene,
+    target: scene === "custom" ? (customTarget || requireValue("routing-custom-target", "\u81ea\u5b9a\u4e49\u76ee\u6807")) : scene,
+    outbound,
     ip_strategy: requireValue("routing-ip-strategy", "IP \u7b56\u7565"),
     priority: requireValue("routing-priority", "\u4f18\u5148\u7ea7"),
   };
@@ -1477,6 +1505,8 @@ document.getElementById("routing-add-btn").addEventListener("click", async () =>
     notify(error.message);
   }
 });
+document.getElementById("routing-scene")?.addEventListener("change", syncRoutingFormState);
+document.getElementById("routing-outbound-mode")?.addEventListener("change", syncRoutingFormState);
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
@@ -1494,6 +1524,7 @@ async function init() {
   refineSections();
   setActiveSection("install");
   syncInstallDefaults();
+  syncRoutingFormState();
   renderInstallStatus(state.installStatus);
   try {
     await refreshAll();

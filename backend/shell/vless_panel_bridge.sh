@@ -1131,10 +1131,36 @@ emit_users() {
 }
 
 emit_user_routing_options() {
-  jq -n --argjson nodes "$(db_get_chain_nodes 2>/dev/null || echo '[]')" '
-    [{value:"",label:"全局规则"},{value:"direct",label:"直连"}]
-    + ($nodes | map({value: ("chain:" + .name), label: ("链式: " + .name)}))
-  '
+  local nodes_json routes_json balancers_json
+  nodes_json="$(db_get_chain_nodes 2>/dev/null || echo '[]')"
+  routes_json="$(jq -c '.routing_rules // []' "$DB_FILE" 2>/dev/null || echo '[]')"
+  balancers_json="$(jq -c '.balancer_groups // []' "$DB_FILE" 2>/dev/null || echo '[]')"
+  jq -n \
+    --argjson nodes "$nodes_json" \
+    --argjson routes "$routes_json" \
+    --argjson balancers "$balancers_json" '
+      def label_for(v):
+        if v == "" then "全局规则"
+        elif v == "direct" then "直连"
+        elif v == "warp" then "WARP"
+        elif (v | startswith("chain:")) then ("链式: " + (v | ltrimstr("chain:")))
+        elif (v | startswith("balancer:")) then ("负载均衡: " + (v | ltrimstr("balancer:")))
+        else v
+        end;
+
+      (
+        [{value:"",label:"全局规则"},{value:"direct",label:"直连"},{value:"warp",label:"WARP"}]
+        + ($nodes | map(select(.name != null and .name != "") | {value:("chain:" + .name), label:("链式: " + .name)}))
+        + ($balancers | map(select(.name != null and .name != "") | {value:("balancer:" + .name), label:("负载均衡: " + .name)}))
+        + (
+            $routes
+            | map(.outbound // "")
+            | map(select(startswith("chain:") or startswith("balancer:") or . == "warp" or . == "direct"))
+            | map({value: ., label: label_for(.)})
+          )
+      )
+      | unique_by(.value)
+    '
 }
 
 emit_subscriptions() {

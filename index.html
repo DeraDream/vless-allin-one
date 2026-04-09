@@ -87,34 +87,6 @@
           </div>
         </header>
 
-        <section class="hero">
-          <div class="hero-copy">
-            <p class="hero-tag">Windows 本地调试 + Linux 正式部署</p>
-            <h3>把脚本能力接成可视化面板，先本地跑通，再回到服务器上线</h3>
-            <p>
-              这个面板围绕安装、核心更新、卸载、用户、订阅和分流六类操作组织。
-              Windows 本地可用 Mock 数据直接测试 GUI，Linux 服务器再切到 Live 模式连接实际脚本。
-            </p>
-          </div>
-          <div class="hero-stats">
-            <article>
-              <span>已安装协议</span>
-              <strong id="stat-installed">0 个协议</strong>
-              <small id="stat-installed-sub">等待加载</small>
-            </article>
-            <article>
-              <span>用户数</span>
-              <strong id="stat-users">0</strong>
-              <small id="stat-users-sub">等待加载</small>
-            </article>
-            <article>
-              <span>分流规则</span>
-              <strong id="stat-routing">0 条规则</strong>
-              <small id="stat-routing-sub">等待加载</small>
-            </article>
-          </div>
-        </section>
-
         <section class="content-grid">
           <div class="panel panel-wide">
             <div class="panel-head">
@@ -130,6 +102,23 @@
             </div>
 
             <section class="section is-visible" id="install">
+              <div class="cards-3">
+                <article class="metric-card">
+                  <span>已安装协议</span>
+                  <strong id="install-total">0</strong>
+                  <small>当前已接管协议数</small>
+                </article>
+                <article class="metric-card">
+                  <span>运行中</span>
+                  <strong id="install-running">0</strong>
+                  <small>服务状态 running</small>
+                </article>
+                <article class="metric-card">
+                  <span>已停止</span>
+                  <strong id="install-stopped">0</strong>
+                  <small>服务状态 stopped / disabled</small>
+                </article>
+              </div>
               <div class="section-layout">
                 <form class="form-grid" onsubmit="return false;">
                   <label>
@@ -351,36 +340,63 @@ Remark: install from panel</textarea>
                 </article>
                 <article class="metric-card">
                   <span>链式出口</span>
-                  <strong>2</strong>
-                  <small>后续可继续接脚本导入</small>
+                  <strong id="routing-chain-count">0</strong>
+                  <small>chain:xxx</small>
                 </article>
                 <article class="metric-card">
                   <span>负载均衡</span>
-                  <strong>1</strong>
-                  <small>当前为演示占位数据</small>
+                  <strong id="routing-balancer-count">0</strong>
+                  <small>balancer:xxx</small>
                 </article>
               </div>
 
               <form class="form-grid compact-form" onsubmit="return false;">
                 <label>
                   规则类型
-                  <input type="text" id="routing-type" value="domain" />
+                  <select id="routing-scene">
+                    <option value="openai">OpenAI</option>
+                    <option value="netflix">Netflix</option>
+                    <option value="telegram">Telegram</option>
+                    <option value="youtube">YouTube</option>
+                    <option value="google">Google</option>
+                    <option value="tiktok">TikTok</option>
+                    <option value="bilibili">Bilibili</option>
+                    <option value="github">GitHub</option>
+                    <option value="ai">AI 全站</option>
+                    <option value="all">全站流量</option>
+                    <option value="custom">自定义域名</option>
+                  </select>
                 </label>
                 <label>
-                  目标
-                  <input type="text" id="routing-target" value="example.com" />
+                  自定义目标
+                  <input type="text" id="routing-custom-target" value="" placeholder="如: example.com,api.example.com" />
                 </label>
                 <label>
-                  出口
-                  <input type="text" id="routing-outbound" value="warp" />
+                  出口类型
+                  <select id="routing-outbound-mode">
+                    <option value="direct">直连</option>
+                    <option value="warp">WARP</option>
+                    <option value="chain">链式代理</option>
+                    <option value="balancer">负载均衡</option>
+                  </select>
+                </label>
+                <label>
+                  出口名称
+                  <input type="text" id="routing-outbound-name" value="" placeholder="链式/负载均衡名称" />
                 </label>
                 <label>
                   IP 策略
-                  <input type="text" id="routing-ip-strategy" value="prefer_ipv4" />
+                  <select id="routing-ip-strategy">
+                    <option value="prefer_ipv4">优先 IPv4</option>
+                    <option value="prefer_ipv6">优先 IPv6</option>
+                    <option value="ipv4_only">仅 IPv4</option>
+                    <option value="ipv6_only">仅 IPv6</option>
+                    <option value="asis">保持默认</option>
+                  </select>
                 </label>
                 <label>
                   优先级
-                  <input type="text" id="routing-priority" value="40" />
+                  <input type="text" id="routing-priority" value="100" />
                 </label>
               </form>
               <div class="inline-actions">
