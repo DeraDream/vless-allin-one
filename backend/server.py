@@ -90,6 +90,54 @@ class InstallTaskManager:
         self._append_event(message, level=level)
         self._write_runtime_log("install-progress", message)
 
+    def _is_generic_install_error(self, message: str) -> bool:
+        text = (message or "").strip().lower()
+        if not text:
+            return True
+        generic = {
+            "安装失败",
+            "install failed",
+            "failed",
+            "error",
+            "unknown error",
+        }
+        return text in generic
+
+    def _tail_lines(self, text: str, max_lines: int = 8) -> list[str]:
+        lines = [(line or "").strip() for line in (text or "").splitlines() if (line or "").strip()]
+        return lines[-max_lines:]
+
+    def _build_live_error_message(
+        self,
+        fallback_message: str,
+        returncode: int,
+        stdout_text: str,
+        stderr_text: str,
+    ) -> str:
+        base = (fallback_message or "").strip() or "安装失败"
+        detail_parts = [f"exit_code={returncode}"]
+
+        stderr_lines = self._tail_lines(stderr_text, max_lines=10)
+        if stderr_lines:
+            detail_parts.append("stderr: " + " | ".join(stderr_lines))
+
+        stdout_candidate = (stdout_text or "").strip()
+        if stdout_candidate:
+            try:
+                payload = json.loads(stdout_candidate)
+                stdout_message = (payload.get("message") or "").strip()
+                if stdout_message and stdout_message != base:
+                    detail_parts.append("stdout.message: " + stdout_message)
+            except json.JSONDecodeError:
+                stdout_lines = self._tail_lines(stdout_candidate, max_lines=6)
+                if stdout_lines:
+                    detail_parts.append("stdout: " + " | ".join(stdout_lines))
+
+        detail = "；".join(detail_parts)
+        if self._is_generic_install_error(base):
+            return f"{base}（{detail}）"
+        return f"{base}（{detail}）"
+
     def status(self):
         with self._lock:
             return self._snapshot()
@@ -272,17 +320,45 @@ class InstallTaskManager:
             raise RuntimeError("__cancelled__")
 
         if process.returncode != 0:
+            parsed_message = ""
             if stdout:
                 try:
                     response = json.loads(stdout)
-                    raise RuntimeError(response.get("message") or "安装失败")
+                    parsed_message = (response.get("message") or "").strip()
                 except json.JSONDecodeError:
                     pass
-            raise RuntimeError(stderr_rest or stdout or "安装失败")
+            raise RuntimeError(
+                self._build_live_error_message(
+                    parsed_message or "安装失败",
+                    process.returncode,
+                    stdout,
+                    stderr_rest,
+                )
+            )
 
-        response = json.loads(stdout or "{}")
+        try:
+            response = json.loads(stdout or "{}")
+        except json.JSONDecodeError:
+            raise RuntimeError(
+                self._build_live_error_message(
+                    "安装结果解析失败",
+                    process.returncode,
+                    stdout,
+                    stderr_rest,
+                )
+            )
         if response.get("ok") is False:
-            raise RuntimeError(response.get("message") or "安装失败")
+            message = (response.get("message") or "").strip() or "安装失败"
+            if self._is_generic_install_error(message):
+                raise RuntimeError(
+                    self._build_live_error_message(
+                        message,
+                        process.returncode,
+                        stdout,
+                        stderr_rest,
+                    )
+                )
+            raise RuntimeError(message)
 
     def _run_install(self, payload) -> None:
         backup_dir = None
@@ -311,7 +387,10 @@ class InstallTaskManager:
                     error=str(exc),
                     level="error",
                 )
-                self._write_runtime_log("install-runtime", f"install failed: {exc}")
+                for line in str(exc).splitlines():
+                    text = line.strip()
+                    if text:
+                        self._write_runtime_log("install-runtime", f"install failed: {text}")
 
 
 INSTALL_MANAGER = InstallTaskManager(ADAPTER)
