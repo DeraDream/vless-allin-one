@@ -204,27 +204,30 @@ update_script() {
 }
 
 show_menu() {
+  local panel_url
+  panel_url="\$(get_panel_url)"
   echo ""
-  echo "VLESS 管理菜单"
-  echo "1. 打开脚本主菜单"
-  echo "2. 查看面板状态"
-  echo "3. 重启面板"
-  echo "4. 停止面板"
-  echo "5. 启动面板"
-  echo "6. 查看实时日志"
-  echo "7. 更新脚本（从 GitHub 拉取并重启）"
+  echo "VLESS 面板管理菜单"
+  echo "当前面板地址: \$panel_url"
+  echo "1. 查看面板状态"
+  echo "2. 重启面板"
+  echo "3. 停止面板"
+  echo "4. 启动面板"
+  echo "5. 查看实时日志"
+  echo "6. 更新脚本（从 GitHub 拉取并重启）"
+  echo "7. 进入原脚本主菜单"
   echo "8. 彻底卸载面板"
   echo "0. 退出"
   echo ""
   read -rp "请选择: " choice
   case "\$choice" in
-    1) bash "\$APP_DIR/vless-server.sh" ;;
-    2) systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
-    3) systemctl restart "\$PANEL_SERVICE" && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
-    4) systemctl stop "\$PANEL_SERVICE" ;;
-    5) systemctl start "\$PANEL_SERVICE" && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
-    6) journalctl -u "\$PANEL_SERVICE" -f ;;
-    7) update_script && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
+    1) systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
+    2) systemctl restart "\$PANEL_SERVICE" && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
+    3) systemctl stop "\$PANEL_SERVICE" ;;
+    4) systemctl start "\$PANEL_SERVICE" && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
+    5) journalctl -u "\$PANEL_SERVICE" -f ;;
+    6) update_script && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
+    7) bash "\$APP_DIR/vless-server.sh" ;;
     8)
       read -rp "确认彻底卸载面板和命令菜单？[y/N]: " confirm
       [[ "\$confirm" =~ ^[yY]$ ]] || exit 0
@@ -242,9 +245,31 @@ show_menu() {
   esac
 }
 
+get_primary_ip() {
+  hostname -I 2>/dev/null | awk '{print \$1}'
+}
+
+get_panel_url() {
+  local host port env_line token
+  env_line="\$(systemctl show "\$PANEL_SERVICE" --property=Environment 2>/dev/null | sed -n 's/^Environment=//p')"
+  for token in \$env_line; do
+    case "\$token" in
+      PANEL_HOST=*) host="\${token#PANEL_HOST=}" ;;
+      PANEL_PORT=*) port="\${token#PANEL_PORT=}" ;;
+    esac
+  done
+  [[ -z "\$host" ]] && host="0.0.0.0"
+  [[ -z "\$port" ]] && port="8765"
+  if [[ "\$host" == "0.0.0.0" || "\$host" == "::" ]]; then
+    local ip
+    ip="\$(get_primary_ip)"
+    [[ -n "\$ip" ]] && host="\$ip"
+  fi
+  echo "http://\${host}:\${port}"
+}
+
 case "\${1:-menu}" in
   menu) show_menu ;;
-  script) bash "\$APP_DIR/vless-server.sh" ;;
   status) systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
   restart) systemctl restart "\$PANEL_SERVICE" ;;
   stop) systemctl stop "\$PANEL_SERVICE" && kill_panel_processes ;;
@@ -261,7 +286,7 @@ case "\${1:-menu}" in
     rm -rf "\$APP_DIR"
     ;;
   *)
-    echo "用法: vless [menu|script|status|restart|stop|start|logs|update|update-script|uninstall]"
+    echo "用法: vless [menu|status|restart|stop|start|logs|update|update-script|uninstall]"
     exit 1
     ;;
 esac
