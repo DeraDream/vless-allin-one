@@ -411,12 +411,26 @@ panel_protocol_core() {
 
 panel_reload_core() {
   local core="$1"
+  local out=""
+  local out_fallback=""
   case "$core" in
     xray)
       if [[ -n "$(get_xray_protocols 2>/dev/null || true)" ]]; then
         create_server_scripts >/dev/null 2>&1 || true
         create_service "vless" >/dev/null 2>&1 || true
-        rebuild_and_reload_xray "silent" >/dev/null 2>&1 || start_services >/dev/null 2>&1 || true
+        if ! run_with_error_capture out rebuild_and_reload_xray "silent"; then
+          if ! run_with_error_capture out_fallback start_services; then
+            [[ -n "$out" ]] && printf '%s\n' "$out" >&2
+            [[ -n "$out_fallback" ]] && printf '%s\n' "$out_fallback" >&2
+            return 1
+          fi
+        fi
+        if ! svc status vless-reality >/dev/null 2>&1; then
+          if ! run_with_error_capture out svc start vless-reality; then
+            [[ -n "$out" ]] && printf '%s\n' "$out" >&2
+            return 1
+          fi
+        fi
       else
         svc stop vless-reality >/dev/null 2>&1 || true
         rm -f "$CFG/config.json"
@@ -426,13 +440,26 @@ panel_reload_core() {
       if [[ -n "$(get_singbox_protocols 2>/dev/null || true)" ]]; then
         create_server_scripts >/dev/null 2>&1 || true
         create_singbox_service >/dev/null 2>&1 || true
-        rebuild_and_reload_singbox "silent" >/dev/null 2>&1 || start_services >/dev/null 2>&1 || true
+        if ! run_with_error_capture out rebuild_and_reload_singbox "silent"; then
+          if ! run_with_error_capture out_fallback start_services; then
+            [[ -n "$out" ]] && printf '%s\n' "$out" >&2
+            [[ -n "$out_fallback" ]] && printf '%s\n' "$out_fallback" >&2
+            return 1
+          fi
+        fi
+        if ! svc status vless-singbox >/dev/null 2>&1; then
+          if ! run_with_error_capture out svc start vless-singbox; then
+            [[ -n "$out" ]] && printf '%s\n' "$out" >&2
+            return 1
+          fi
+        fi
       else
         svc stop vless-singbox >/dev/null 2>&1 || true
         rm -f "$CFG/singbox.json"
       fi
       ;;
   esac
+  return 0
 }
 
 panel_reload_all_routing() {
