@@ -151,6 +151,7 @@ prepare_runtime() {
     "$INSTALL_DIR/deploy_vps.sh" \
     "$INSTALL_DIR/backend/shell/vless_panel_bridge.sh" \
     "$INSTALL_DIR/install.sh" \
+    "$INSTALL_DIR/update.sh" \
     "$INSTALL_DIR/vless-server.sh"
 }
 
@@ -168,6 +169,17 @@ kill_panel_processes() {
   pkill -f "python3 -m backend.server" 2>/dev/null || true
 }
 
+update_script() {
+  if [[ -x "\$APP_DIR/update.sh" ]]; then
+    bash "\$APP_DIR/update.sh"
+  else
+    git -C "\$APP_DIR" fetch --all --tags
+    git -C "\$APP_DIR" pull --ff-only
+    chmod +x "\$APP_DIR/run_local.sh" "\$APP_DIR/deploy_vps.sh" "\$APP_DIR/backend/shell/vless_panel_bridge.sh" "\$APP_DIR/install.sh" "\$APP_DIR/update.sh" 2>/dev/null || true
+    systemctl restart "\$PANEL_SERVICE"
+  fi
+}
+
 show_menu() {
   echo ""
   echo "VLESS 管理菜单"
@@ -177,7 +189,7 @@ show_menu() {
   echo "4. 停止面板"
   echo "5. 启动面板"
   echo "6. 查看实时日志"
-  echo "7. 更新项目"
+  echo "7. 更新脚本（从 GitHub 拉取并重启）"
   echo "8. 彻底卸载面板"
   echo "0. 退出"
   echo ""
@@ -189,7 +201,7 @@ show_menu() {
     4) systemctl stop "\$PANEL_SERVICE" ;;
     5) systemctl start "\$PANEL_SERVICE" && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
     6) journalctl -u "\$PANEL_SERVICE" -f ;;
-    7) git -C "\$APP_DIR" fetch --all --tags && git -C "\$APP_DIR" pull --ff-only && systemctl restart "\$PANEL_SERVICE" ;;
+    7) update_script && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
     8)
       read -rp "确认彻底卸载面板和命令菜单？[y/N]: " confirm
       [[ "\$confirm" =~ ^[yY]$ ]] || exit 0
@@ -215,7 +227,7 @@ case "\${1:-menu}" in
   stop) systemctl stop "\$PANEL_SERVICE" && kill_panel_processes ;;
   start) systemctl start "\$PANEL_SERVICE" ;;
   logs) journalctl -u "\$PANEL_SERVICE" -f ;;
-  update) git -C "\$APP_DIR" fetch --all --tags && git -C "\$APP_DIR" pull --ff-only && systemctl restart "\$PANEL_SERVICE" ;;
+  update|update-script) update_script ;;
   uninstall)
     systemctl stop "\$PANEL_SERVICE" 2>/dev/null || true
     systemctl disable "\$PANEL_SERVICE" 2>/dev/null || true
@@ -226,7 +238,7 @@ case "\${1:-menu}" in
     rm -rf "\$APP_DIR"
     ;;
   *)
-    echo "用法: vless [menu|script|status|restart|stop|start|logs|update|uninstall]"
+    echo "用法: vless [menu|script|status|restart|stop|start|logs|update|update-script|uninstall]"
     exit 1
     ;;
 esac

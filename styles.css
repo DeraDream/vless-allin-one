@@ -893,6 +893,71 @@ tr:last-child td {
   vertical-align: -2px;
 }
 
+.share-export-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+
+.share-export-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 18, 34, 0.58);
+}
+
+.share-export-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(960px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  margin: 20px auto;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.share-export-head,
+.share-export-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.share-export-head {
+  margin-bottom: 14px;
+}
+
+.share-export-name {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--muted);
+}
+
+.share-export-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.share-export-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(15, 23, 42, 0.02);
+}
+
+.share-export-card textarea {
+  margin-top: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
 @keyframes button-spin {
   to {
     transform: rotate(360deg);
@@ -940,5 +1005,11 @@ tr:last-child td {
   .segment-control {
     width: 100%;
     overflow: auto;
+  }
+
+  .share-export-dialog {
+    width: calc(100vw - 20px);
+    margin: 10px auto;
+    padding: 14px;
   }
 }

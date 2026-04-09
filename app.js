@@ -579,6 +579,180 @@ function notify(message) {
   }
 }
 
+function ensureShareExportModal() {
+  if (document.getElementById("share-export-modal")) return;
+  const modal = document.createElement("div");
+  modal.className = "share-export-modal";
+  modal.id = "share-export-modal";
+  modal.hidden = true;
+  modal.innerHTML = `
+    <div class="share-export-backdrop" data-share-modal-close="true"></div>
+    <section class="share-export-dialog" role="dialog" aria-modal="true" aria-labelledby="share-export-title">
+      <header class="share-export-head">
+        <div>
+          <p class="panel-kicker">用户连接导出</p>
+          <h3 id="share-export-title">VLESS 节点信息</h3>
+        </div>
+        <button type="button" class="ghost-btn" data-share-modal-close="true">关闭</button>
+      </header>
+      <label class="share-export-name">
+        节点名称（会同步到两个连接）
+        <input id="share-export-name-input" type="text" value="" />
+      </label>
+      <div class="share-export-grid">
+        <article class="share-export-card">
+          <div class="share-export-card-head">
+            <strong>原生 VLESS 链接</strong>
+            <button type="button" class="ghost-btn small-btn" id="share-copy-native-btn">复制</button>
+          </div>
+          <textarea id="share-native-markdown" rows="8" readonly></textarea>
+        </article>
+        <article class="share-export-card">
+          <div class="share-export-card-head">
+            <strong>VLESS 转换 YAML 节点</strong>
+            <button type="button" class="ghost-btn small-btn" id="share-copy-yaml-btn">复制</button>
+          </div>
+          <textarea id="share-yaml-markdown" rows="16" readonly></textarea>
+        </article>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(modal);
+}
+
+function markdownCodeBlock(lang, content) {
+  return `\`\`\`${lang}\n${content}\n\`\`\``;
+}
+
+function yamlQuote(value) {
+  return `"${String(value ?? "").replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
+function parseVlessLink(link) {
+  const parsed = new URL(link);
+  if (parsed.protocol !== "vless:") {
+    throw new Error("当前导出链接不是 vless:// 格式");
+  }
+  const params = parsed.searchParams;
+  return {
+    uuid: parsed.username,
+    server: parsed.hostname,
+    port: Number(parsed.port || 443),
+    network: params.get("type") || "tcp",
+    security: params.get("security") || "",
+    sni: params.get("sni") || "",
+    host: params.get("host") || "",
+    path: params.get("path") || "",
+    flow: params.get("flow") || "",
+    fp: params.get("fp") || "",
+    pbk: params.get("pbk") || "",
+    sid: params.get("sid") || "",
+    spx: params.get("spx") || "",
+  };
+}
+
+function buildVlessLinkWithName(link, name) {
+  const parsed = new URL(link);
+  parsed.hash = encodeURIComponent(name);
+  return parsed.toString();
+}
+
+function buildVlessYamlNode(link, name) {
+  const info = parseVlessLink(link);
+  const lines = [
+    "- name: " + yamlQuote(name),
+    "  type: vless",
+    "  server: " + yamlQuote(info.server),
+    "  port: " + Number(info.port || 443),
+    "  uuid: " + yamlQuote(info.uuid),
+    "  cipher: auto",
+    "  udp: true",
+    "  network: " + yamlQuote(info.network),
+    "  tls: " + String(info.security === "reality" || info.security === "tls"),
+  ];
+
+  if (info.sni) lines.push("  servername: " + yamlQuote(info.sni));
+  if (info.flow) lines.push("  flow: " + yamlQuote(info.flow));
+  if (info.fp) lines.push("  client-fingerprint: " + yamlQuote(info.fp));
+
+  if (info.security === "reality") {
+    lines.push("  reality-opts:");
+    if (info.pbk) lines.push("    public-key: " + yamlQuote(info.pbk));
+    if (info.sid) lines.push("    short-id: " + yamlQuote(info.sid));
+  }
+
+  if (info.network === "ws") {
+    lines.push("  ws-opts:");
+    lines.push("    path: " + yamlQuote(info.path || "/"));
+    if (info.host) {
+      lines.push("    headers:");
+      lines.push("      Host: " + yamlQuote(info.host));
+    }
+  }
+
+  if (info.network === "httpupgrade") {
+    lines.push("  http-opts:");
+    if (info.path) lines.push("    path: " + yamlQuote(info.path));
+    if (info.host) lines.push("    host: [" + yamlQuote(info.host) + "]");
+  }
+
+  if (info.spx) {
+    lines.push("  packet-encoding: " + yamlQuote(info.spx));
+  }
+
+  return lines.join("\n");
+}
+
+function closeShareExportModal() {
+  const modal = document.getElementById("share-export-modal");
+  if (modal) modal.hidden = true;
+}
+
+function openShareExportModal(payload) {
+  ensureShareExportModal();
+  const modal = document.getElementById("share-export-modal");
+  const nameInput = document.getElementById("share-export-name-input");
+  const nativeMarkdown = document.getElementById("share-native-markdown");
+  const yamlMarkdown = document.getElementById("share-yaml-markdown");
+  const copyNativeBtn = document.getElementById("share-copy-native-btn");
+  const copyYamlBtn = document.getElementById("share-copy-yaml-btn");
+  if (!modal || !nameInput || !nativeMarkdown || !yamlMarkdown || !copyNativeBtn || !copyYamlBtn) return;
+
+  const rawLink = payload.link || "";
+  const fallbackName = payload.username || "vless-node";
+
+  const updateBlocks = () => {
+    const name = nameInput.value.trim() || fallbackName;
+    const namedLink = buildVlessLinkWithName(rawLink, name);
+    const yamlNode = buildVlessYamlNode(namedLink, name);
+    nativeMarkdown.value = markdownCodeBlock("txt", namedLink);
+    yamlMarkdown.value = markdownCodeBlock("yaml", yamlNode);
+  };
+
+  nameInput.value = fallbackName;
+  updateBlocks();
+
+  nameInput.oninput = updateBlocks;
+  copyNativeBtn.onclick = async () => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(nativeMarkdown.value);
+      notify("原生 VLESS Markdown 已复制");
+      return;
+    }
+    window.prompt("请复制原生 VLESS Markdown", nativeMarkdown.value);
+  };
+  copyYamlBtn.onclick = async () => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(yamlMarkdown.value);
+      notify("YAML 节点 Markdown 已复制");
+      return;
+    }
+    window.prompt("请复制 YAML 节点 Markdown", yamlMarkdown.value);
+  };
+
+  modal.hidden = false;
+}
+
 function setButtonLoading(button, loading, loadingText = "\u5904\u7406\u4e2d...", idleText = "") {
   if (!button) return;
   if (!button.dataset.idleText) {
@@ -1022,12 +1196,8 @@ async function exportUserShareLink(userId) {
   if (!link) {
     throw new Error("\u6ca1\u6709\u751f\u6210\u53ef\u7528\u94fe\u63a5");
   }
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(link);
-    notify(`\u5df2\u590d\u5236 ${result.username} \u7684\u94fe\u63a5`);
-    return;
-  }
-  window.prompt("\u8bf7\u590d\u5236\u7528\u6237\u94fe\u63a5", link);
+  openShareExportModal(result);
+  notify(`已生成 ${result.username} 的连接导出内容`);
 }
 
 async function addRouting() {
@@ -1078,6 +1248,11 @@ async function saveSubscription() {
 }
 
 document.addEventListener("click", async (event) => {
+  const closeTrigger = event.target.closest('[data-share-modal-close="true"]');
+  if (closeTrigger) {
+    closeShareExportModal();
+    return;
+  }
   const trigger = event.target.closest("button");
   if (!trigger) return;
 
@@ -1227,12 +1402,19 @@ document.getElementById("routing-add-btn").addEventListener("click", async () =>
   }
 });
 
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeShareExportModal();
+  }
+});
+
 async function init() {
   localizeStaticText();
   setupSectionTabs();
   ensureInstallProtocolList();
   ensureLogPanel();
   ensureInstallStatusCard();
+  ensureShareExportModal();
   refineSections();
   setActiveSection("install");
   syncInstallDefaults();
