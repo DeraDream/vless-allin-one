@@ -227,7 +227,7 @@ show_menu() {
     4) systemctl start "\$PANEL_SERVICE" && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
     5) journalctl -u "\$PANEL_SERVICE" -f ;;
     6) update_script && systemctl --no-pager --full status "\$PANEL_SERVICE" ;;
-    7) bash "\$APP_DIR/vless-server.sh" ;;
+    7) VLESS_KEEP_PANEL_CLI=1 bash "\$APP_DIR/vless-server.sh" ;;
     8)
       read -rp "确认彻底卸载面板和命令菜单？[y/N]: " confirm
       [[ "\$confirm" =~ ^[yY]$ ]] || exit 0

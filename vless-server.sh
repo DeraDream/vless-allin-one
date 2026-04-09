@@ -10471,6 +10471,9 @@ stop_services() {
 
 # 自动更新系统脚本 (启动时检测)
 _auto_update_system_script() {
+    if [[ "${VLESS_KEEP_PANEL_CLI:-0}" == "1" ]]; then
+        return 0
+    fi
     local system_script="/usr/local/bin/vless-server.sh"
     local current_script="$0"
     
@@ -10508,6 +10511,10 @@ _auto_update_system_script() {
 }
 
 create_shortcut() {
+    if [[ "${VLESS_KEEP_PANEL_CLI:-0}" == "1" ]]; then
+        _info "宸茶烦杩? vless 蹇嵎鍛戒护鍚屾锛屼繚鐣欓潰鏉跨鐞嗗叆鍙?"
+        return 0
+    fi
     local system_script="/usr/local/bin/vless-server.sh"
     local current_script="$0"
 
