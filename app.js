@@ -650,6 +650,35 @@ function notify(message) {
   }
 }
 
+async function copyText(content) {
+  const text = String(content ?? "");
+  if (!text) {
+    throw new Error("\u6ca1\u6709\u53ef\u4ee5\u590d\u5236\u7684\u5185\u5bb9");
+  }
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const helper = document.createElement("textarea");
+  helper.value = text;
+  helper.setAttribute("readonly", "true");
+  helper.style.position = "fixed";
+  helper.style.top = "-9999px";
+  helper.style.left = "-9999px";
+  helper.style.opacity = "0";
+  document.body.appendChild(helper);
+  helper.focus();
+  helper.select();
+  helper.setSelectionRange(0, helper.value.length);
+
+  const copied = document.execCommand("copy");
+  document.body.removeChild(helper);
+  if (!copied) {
+    throw new Error("\u590d\u5236\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u526a\u8d34\u677f\u6743\u9650");
+  }
+}
+
 function ensureShareExportModal() {
   if (document.getElementById("share-export-modal")) return;
   const modal = document.createElement("div");
@@ -1539,6 +1568,43 @@ document.addEventListener("change", (event) => {
   }
 });
 
+document.addEventListener(
+  "click",
+  async (event) => {
+    const installErrorCopy = event.target.closest('[data-copy-install-error-log="true"]');
+    const copyNativeBtn = event.target.closest("#share-copy-native-btn");
+    const copyYamlBtn = event.target.closest("#share-copy-yaml-btn");
+    if (!installErrorCopy && !copyNativeBtn && !copyYamlBtn) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    try {
+      if (installErrorCopy) {
+        const content = document.getElementById("install-error-log-block")?.value || "";
+        if (!content.trim()) {
+          throw new Error("\u5f53\u524d\u6ca1\u6709\u53ef\u590d\u5236\u7684\u9519\u8bef\u65e5\u5fd7");
+        }
+        await copyText(content);
+        notify("\u5df2\u590d\u5236\u5b8c\u6574\u9519\u8bef\u65e5\u5fd7\u5757");
+        return;
+      }
+
+      if (copyNativeBtn) {
+        await copyText(document.getElementById("share-native-markdown")?.value || "");
+        notify("\u539f\u751f VLESS Markdown \u5df2\u590d\u5236");
+        return;
+      }
+
+      await copyText(document.getElementById("share-yaml-markdown")?.value || "");
+      notify("YAML \u8282\u70b9 Markdown \u5df2\u590d\u5236");
+    } catch (error) {
+      notify(error.message);
+    }
+  },
+  true
+);
+
 document.getElementById("refresh-all-btn").addEventListener("click", async () => {
   try {
     await refreshAll();
@@ -1549,7 +1615,9 @@ document.getElementById("refresh-all-btn").addEventListener("click", async () =>
 });
 
 document.getElementById("install-submit-btn").addEventListener("click", async () => {
+  const button = document.getElementById("install-submit-btn");
   try {
+    setButtonLoading(button, true, state.installStatus?.running ? "\u53d6\u6d88\u4e2d..." : "\u542f\u52a8\u4e2d...");
     if (state.installStatus?.running) {
       await cancelInstall();
     } else {
@@ -1557,6 +1625,8 @@ document.getElementById("install-submit-btn").addEventListener("click", async ()
     }
   } catch (error) {
     notify(error.message);
+  } finally {
+    setButtonLoading(button, false);
   }
 });
 
@@ -1590,10 +1660,15 @@ document.getElementById("subscription-reset-btn").addEventListener("click", asyn
 });
 
 document.getElementById("routing-add-btn").addEventListener("click", async () => {
+  const button = document.getElementById("routing-add-btn");
   try {
+    setButtonLoading(button, true, "\u521b\u5efa\u4e2d...");
+    notify("\u6b63\u5728\u521b\u5efa\u5206\u6d41\u89c4\u5219...");
     await addRouting();
   } catch (error) {
     notify(error.message);
+  } finally {
+    setButtonLoading(button, false);
   }
 });
 document.getElementById("chain-import-btn")?.addEventListener("click", async () => {
