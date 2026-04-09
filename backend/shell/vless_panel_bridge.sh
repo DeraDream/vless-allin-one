@@ -255,6 +255,58 @@ diagnose_xray_install_failure() {
   printf '%s' "$reason"
 }
 
+install_xray_direct() {
+  local arch xarch api_out latest_tag latest_ver url out
+  local tmp_dir bin_path
+
+  arch="$(uname -m 2>/dev/null || echo unknown)"
+  case "$arch" in
+    x86_64) xarch="64" ;;
+    aarch64) xarch="arm64-v8a" ;;
+    armv7l) xarch="arm32-v7a" ;;
+    *) return 1 ;;
+  esac
+
+  if ! run_with_error_capture api_out curl -fsSL --connect-timeout 15 --max-time 30 \
+    https://api.github.com/repos/XTLS/Xray-core/releases/latest; then
+    return 1
+  fi
+  latest_tag="$(printf '%s' "$api_out" | jq -r '.tag_name // empty' 2>/dev/null || true)"
+  latest_ver="${latest_tag#v}"
+  [[ -n "$latest_ver" && "$latest_ver" != "null" ]] || return 1
+
+  url="https://github.com/XTLS/Xray-core/releases/download/v${latest_ver}/Xray-linux-${xarch}.zip"
+  tmp_dir="$(mktemp -d 2>/dev/null || true)"
+  [[ -n "$tmp_dir" && -d "$tmp_dir" ]] || return 1
+
+  if ! run_with_error_capture out curl -fsSL --connect-timeout 30 --max-time 180 --retry 2 \
+    -o "${tmp_dir}/xray.zip" "$url"; then
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  if ! run_with_error_capture out unzip -oq "${tmp_dir}/xray.zip" -d "$tmp_dir"; then
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  bin_path="$(find "$tmp_dir" -type f -name xray | head -n1)"
+  [[ -n "$bin_path" && -f "$bin_path" ]] || { rm -rf "$tmp_dir"; return 1; }
+
+  install -m 755 "$bin_path" /usr/local/bin/xray || { rm -rf "$tmp_dir"; return 1; }
+  mkdir -p /usr/local/share/xray
+  find "$tmp_dir" -type f -name "*.dat" -exec cp -f {} /usr/local/share/xray/ \; 2>/dev/null || true
+
+  if ! command -v xray >/dev/null 2>&1; then
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+  xray version >/dev/null 2>&1 || { rm -rf "$tmp_dir"; return 1; }
+
+  rm -rf "$tmp_dir"
+  return 0
+}
+
 preflight_binary_install() {
   [[ "${EUID:-0}" -eq 0 ]] || { json_fail "需要 root 权限执行安装（请使用 root 或 sudo）"; exit 1; }
 
@@ -316,10 +368,13 @@ ensure_xray_ready() {
     preflight_binary_install
     check_dependencies >/dev/null 2>&1 || true
     if ! run_with_error_capture out install_xray; then
-      [[ -z "$(printf '%s' "$out" | tr -d '[:space:]')" ]] && out="$(diagnose_xray_install_failure)"
-      [[ -n "$out" ]] && printf '%s\n' "$out" >&2
-      json_fail "Xray 安装失败: $(short_error "$out")"
-      exit 1
+      # 主脚本安装失败时，启用桥接层兜底安装，避免黑盒失败卡死。
+      if ! install_xray_direct; then
+        [[ -z "$(printf '%s' "$out" | tr -d '[:space:]')" ]] && out="$(diagnose_xray_install_failure)"
+        [[ -n "$out" ]] && printf '%s\n' "$out" >&2
+        json_fail "Xray 安装失败: $(short_error "$out")"
+        exit 1
+      fi
     fi
   fi
   if ! xray_bin >/dev/null 2>&1; then
