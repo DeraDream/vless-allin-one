@@ -939,7 +939,9 @@ function renderUserRoutingOptions() {
   if (!select) return;
 
   const currentValue = select.value;
-  const options = Array.isArray(state.userRoutingOptions) && state.userRoutingOptions.length
+  const chainSelect = ensureUserChainRoutingSelect();
+  const currentChainValue = chainSelect?.value || "";
+  const rawOptions = Array.isArray(state.userRoutingOptions) && state.userRoutingOptions.length
     ? state.userRoutingOptions
     : [
         { value: "", label: "\u5168\u5c40\u89c4\u5219" },
@@ -947,12 +949,117 @@ function renderUserRoutingOptions() {
         { value: "warp", label: "WARP" },
       ];
 
+  const chainNames = Array.from(
+    new Set(
+      (Array.isArray(state.chainNodes) ? state.chainNodes : [])
+        .map((item) => String(item?.name || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const options = rawOptions.filter((item) => !String(item.value || "").startsWith("chain:"));
+
+  if (chainNames.length === 1) {
+    options.push({ value: `chain:${chainNames[0]}`, label: `\u94fe\u5f0f: ${chainNames[0]}` });
+  } else if (chainNames.length > 1) {
+    options.push({ value: "chain", label: "\u94fe\u5f0f\u4ee3\u7406" });
+  } else {
+    rawOptions
+      .filter((item) => String(item.value || "").startsWith("chain:"))
+      .forEach((item) => options.push(item));
+  }
+
   select.innerHTML = options
     .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
     .join("");
 
-  const hasCurrent = options.some((item) => item.value === currentValue);
-  select.value = hasCurrent ? currentValue : "";
+  const normalizedCurrent =
+    currentValue === "chain" && chainNames.length === 1
+      ? `chain:${chainNames[0]}`
+      : currentValue.startsWith("chain:") && chainNames.length > 1
+        ? "chain"
+        : currentValue;
+  const hasCurrent = options.some((item) => item.value === normalizedCurrent);
+  select.value = hasCurrent ? normalizedCurrent : "";
+
+  if (chainSelect) {
+    chainSelect.innerHTML = chainNames.length
+      ? chainNames.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")
+      : `<option value="">\u6682\u65e0\u53ef\u9009\u94fe\u5f0f\u8282\u70b9</option>`;
+    const selectedChainName = currentValue.startsWith("chain:") ? currentValue.slice(6) : currentChainValue;
+    const hasSelectedChain = chainNames.includes(selectedChainName);
+    chainSelect.value = hasSelectedChain ? selectedChainName : (chainNames[0] || "");
+  }
+
+  syncUserRoutingFormState();
+}
+
+function ensureUserChainRoutingSelect() {
+  let wrapper = document.getElementById("user-chain-routing-wrapper");
+  let select = document.getElementById("user-chain-routing");
+  if (wrapper && select) return select;
+
+  const baseSelect = document.getElementById("user-routing");
+  const statusSelect = document.getElementById("user-status");
+  const statusLabel = statusSelect?.closest("label");
+  const baseLabel = baseSelect?.closest("label");
+  if (!baseLabel || !statusLabel) return null;
+
+  wrapper = document.createElement("label");
+  wrapper.id = "user-chain-routing-wrapper";
+  wrapper.hidden = true;
+  wrapper.innerHTML = `
+    \u94fe\u5f0f\u8282\u70b9
+    <select id="user-chain-routing"></select>
+  `;
+  statusLabel.parentNode.insertBefore(wrapper, statusLabel);
+  return document.getElementById("user-chain-routing");
+}
+
+function syncUserRoutingFormState() {
+  const select = document.getElementById("user-routing");
+  const wrapper = document.getElementById("user-chain-routing-wrapper");
+  const chainSelect = document.getElementById("user-chain-routing");
+  if (!select || !wrapper || !chainSelect) return;
+
+  const shouldShowChain = select.value === "chain";
+  wrapper.hidden = !shouldShowChain;
+  chainSelect.disabled = !shouldShowChain || state.chainNodes.length === 0;
+  if (shouldShowChain && state.chainNodes.length > 0 && !chainSelect.value) {
+    chainSelect.value = state.chainNodes[0].name;
+  }
+}
+
+function selectedUserRoutingValue() {
+  const select = document.getElementById("user-routing");
+  const chainSelect = document.getElementById("user-chain-routing");
+  const value = select?.value ?? "";
+  if (value === "chain") {
+    const chainName = chainSelect?.value?.trim() || requireValue("user-chain-routing", "\u94fe\u5f0f\u8282\u70b9");
+    return `chain:${chainName}`;
+  }
+  return value;
+}
+
+function suggestNextUserName(base = "demo-user") {
+  const normalizedBase = String(base || "demo-user").trim() || "demo-user";
+  const usedNames = new Set((Array.isArray(state.users) ? state.users : []).map((item) => String(item.username || "").trim()));
+  if (!usedNames.has(normalizedBase)) {
+    return normalizedBase;
+  }
+  let index = 2;
+  while (usedNames.has(`${normalizedBase}-${index}`)) {
+    index += 1;
+  }
+  return `${normalizedBase}-${index}`;
+}
+
+function primeUserNameInput(force = false, base = "demo-user") {
+  const input = document.getElementById("user-name");
+  if (!input) return;
+  const current = input.value.trim();
+  if (force || !current || current === "demo-user" || state.users.some((item) => item.username === current)) {
+    input.value = suggestNextUserName(base);
+  }
 }
 
 function selectedCoreChannel(name, fallback = "stable") {
@@ -1005,6 +1112,7 @@ function renderUsers() {
   document.getElementById("users-warning").textContent = String(state.users.filter((item) => item.status !== "enabled").length);
   document.getElementById("users-expiring").textContent = String(state.users.filter((item) => item.expire_at).length);
   renderUserRoutingOptions();
+  primeUserNameInput();
 
   const body = document.getElementById("user-table-body");
   body.innerHTML = state.users
@@ -1359,13 +1467,17 @@ async function submitInstall() {
 }
 
 async function createUser() {
+  const username = requireValue("user-name", "\u7528\u6237\u540d");
+  if (state.users.some((item) => item.username === username)) {
+    throw new Error(`\u7528\u6237\u540d ${username} \u5df2\u5b58\u5728\uff0c\u8bf7\u6362\u4e00\u4e2a`);
+  }
   const payload = {
-    username: requireValue("user-name", "\u7528\u6237\u540d"),
+    username,
     protocol: requireValue("user-protocol", "\u534f\u8bae"),
     port: requireValue("user-port", "\u7aef\u53e3"),
     quota_gb: requireValue("user-quota", "\u914d\u989d"),
     expire_at: document.getElementById("user-expire").value.trim(),
-    routing: document.getElementById("user-routing")?.value ?? "",
+    routing: selectedUserRoutingValue(),
     status: requireValue("user-status", "\u72b6\u6001"),
   };
   const result = await api("/api/users", {
@@ -1374,6 +1486,7 @@ async function createUser() {
   });
   notify(result.message);
   await refreshAll();
+  primeUserNameInput(true, username);
 }
 
 async function exportUserShareLink(userId) {
@@ -1424,6 +1537,11 @@ async function importChainNodes() {
     method: "POST",
     body: JSON.stringify({ kind, content }),
   });
+  const chainNodes = await api("/api/chain/nodes");
+  state.chainNodes = Array.isArray(chainNodes) ? chainNodes : [];
+  renderChainNodes();
+  renderUserRoutingOptions();
+  syncRoutingFormState();
   notify(result.message || "节点导入完成");
   if (kind === "link") {
     document.getElementById("chain-import-content").value = "";
@@ -1685,6 +1803,7 @@ document.getElementById("chain-import-btn")?.addEventListener("click", async () 
 document.getElementById("chain-import-kind")?.addEventListener("change", syncRoutingFormState);
 document.getElementById("routing-scene")?.addEventListener("change", syncRoutingFormState);
 document.getElementById("routing-outbound-mode")?.addEventListener("change", syncRoutingFormState);
+document.getElementById("user-routing")?.addEventListener("change", syncUserRoutingFormState);
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
@@ -1699,6 +1818,7 @@ async function init() {
   ensureLogPanel();
   ensureInstallStatusCard();
   ensureShareExportModal();
+  ensureUserChainRoutingSelect();
   refineSections();
   setActiveSection("install");
   syncInstallDefaults();
