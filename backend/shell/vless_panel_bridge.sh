@@ -36,6 +36,27 @@ json_fail() {
   jq -n --arg msg "$message" '{ok:false,message:$msg}'
 }
 
+short_error() {
+  local text="${1:-}"
+  text="$(printf '%s' "$text" | tr '\r\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')"
+  if [[ ${#text} -gt 220 ]]; then
+    text="${text:0:220}..."
+  fi
+  printf '%s' "$text"
+}
+
+run_with_error_capture() {
+  local __var_name="$1"
+  shift
+  local out
+  set +e
+  out="$("$@" 2>&1)"
+  local rc=$?
+  set -e
+  printf -v "$__var_name" '%s' "$out"
+  return $rc
+}
+
 progress_emit() {
   local message="$1"
   printf '__PROGRESS__:%s\n' "$message" >&2
@@ -118,16 +139,34 @@ ensure_base_dependencies() {
 }
 
 ensure_xray_ready() {
+  local out=""
   if ! xray_bin >/dev/null 2>&1; then
     check_dependencies >/dev/null 2>&1 || true
-    install_xray >/dev/null 2>&1 || { json_fail "Xray 安装失败"; exit 1; }
+    if ! run_with_error_capture out install_xray; then
+      [[ -n "$out" ]] && printf '%s\n' "$out" >&2
+      json_fail "Xray 安装失败: $(short_error "$out")"
+      exit 1
+    fi
+  fi
+  if ! xray_bin >/dev/null 2>&1; then
+    json_fail "Xray 安装后未检测到可执行文件"
+    exit 1
   fi
 }
 
 ensure_singbox_ready() {
+  local out=""
   if ! singbox_bin >/dev/null 2>&1; then
     check_dependencies >/dev/null 2>&1 || true
-    install_singbox >/dev/null 2>&1 || { json_fail "Sing-box 安装失败"; exit 1; }
+    if ! run_with_error_capture out install_singbox; then
+      [[ -n "$out" ]] && printf '%s\n' "$out" >&2
+      json_fail "Sing-box 安装失败: $(short_error "$out")"
+      exit 1
+    fi
+  fi
+  if ! singbox_bin >/dev/null 2>&1; then
+    json_fail "Sing-box 安装后未检测到可执行文件"
+    exit 1
   fi
 }
 
@@ -222,7 +261,11 @@ panel_install_protocol() {
       sid="$(normalize_short_id "${short_id:-$(gen_sid)}")"
       sni="${server_name:-${domain:-$(gen_sni)}}"
       progress_emit "生成 Reality 密钥"
-      keys="$(reality_keys_generate)"
+      if ! run_with_error_capture keys reality_keys_generate; then
+        [[ -n "$keys" ]] && printf '%s\n' "$keys" >&2
+        json_fail "Reality 密钥生成失败: $(short_error "$keys")"
+        exit 1
+      fi
       privkey="$(reality_key_extract 'private[ _-]*key' "$keys")"
       pubkey="$(reality_key_extract 'public[ _-]*key' "$keys")"
       [[ -z "$pubkey" ]] && pubkey="$(reality_key_extract 'password' "$keys")"
@@ -244,7 +287,11 @@ panel_install_protocol() {
       path="/xhttp"
       sni="${server_name:-${domain:-$(gen_sni)}}"
       progress_emit "生成 XHTTP Reality 密钥"
-      keys="$(reality_keys_generate)"
+      if ! run_with_error_capture keys reality_keys_generate; then
+        [[ -n "$keys" ]] && printf '%s\n' "$keys" >&2
+        json_fail "XHTTP Reality 密钥生成失败: $(short_error "$keys")"
+        exit 1
+      fi
       privkey="$(reality_key_extract 'private[ _-]*key' "$keys")"
       pubkey="$(reality_key_extract 'public[ _-]*key' "$keys")"
       [[ -z "$pubkey" ]] && pubkey="$(reality_key_extract 'password' "$keys")"
