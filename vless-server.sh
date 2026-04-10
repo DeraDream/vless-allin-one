@@ -14144,6 +14144,12 @@ parse_proxy_link() {
             local flow=$(_get_query_param "$params" "flow")
             local encryption=$(_get_query_param "$params" "encryption")
             [[ -z "$encryption" ]] && encryption="none"
+            local service_name=$(_get_query_param "$params" "serviceName")
+            local authority=$(_get_query_param "$params" "authority")
+            local mode=$(_get_query_param "$params" "mode")
+            local alpn=$(_get_query_param "$params" "alpn")
+            local allow_insecure=$(_get_query_param "$params" "allowInsecure")
+            [[ -z "$allow_insecure" ]] && allow_insecure="0"
             # 提取 ws 协议的 path 和 host 参数
             local ws_path=$(_get_query_param "$params" "path")
             [[ -z "$ws_path" ]] && ws_path="/"
@@ -14155,8 +14161,9 @@ parse_proxy_link() {
                 --arg name "$name" --arg host "$host" --argjson port "$port" \
                 --arg uuid "$uuid" --arg security "$security" --arg sni "$sni" \
                 --arg fp "$fp" --arg net "$net" --arg pbk "$pbk" --arg sid "$sid" --arg flow "$flow" --arg enc "$encryption" \
-                --arg wsPath "$ws_path" --arg wsHost "$ws_host" \
-                '{name:$name,type:"vless",server:$host,port:$port,uuid:$uuid,security:$security,sni:$sni,fingerprint:$fp,network:$net,publicKey:$pbk,shortId:$sid,flow:$flow,encryption:$enc,wsPath:$wsPath,wsHost:$wsHost}')
+                --arg wsPath "$ws_path" --arg wsHost "$ws_host" --arg serviceName "$service_name" \
+                --arg authority "$authority" --arg mode "$mode" --arg alpn "$alpn" --arg allowInsecure "$allow_insecure" \
+                '{name:$name,type:"vless",server:$host,port:$port,uuid:$uuid,security:$security,sni:$sni,fingerprint:$fp,network:$net,publicKey:$pbk,shortId:$sid,flow:$flow,encryption:$enc,wsPath:$wsPath,wsHost:$wsHost,serviceName:$serviceName,authority:$authority,mode:$mode,alpn:$alpn,allowInsecure:$allowInsecure}')
             ;;
         trojan://*)
             # Trojan 格式: trojan://password@host:port?params#name
@@ -14406,6 +14413,11 @@ gen_xray_chain_outbound() {
             local net=$(echo "$node" | jq -r '.network // "tcp"')
             local ws_path=$(echo "$node" | jq -r '.wsPath // "/"')
             local ws_host=$(echo "$node" | jq -r '.wsHost // ""')
+            local service_name=$(echo "$node" | jq -r '.serviceName // ""')
+            local authority=$(echo "$node" | jq -r '.authority // ""')
+            local mode=$(echo "$node" | jq -r '.mode // ""')
+            local alpn=$(echo "$node" | jq -r '.alpn // ""')
+            local allow_insecure=$(echo "$node" | jq -r '.allowInsecure // "0"')
             # 如果 encryption 为空，默认使用 none
             [[ -z "$encryption" ]] && encryption="none"
             
@@ -14419,12 +14431,69 @@ gen_xray_chain_outbound() {
                     stream=$(jq -n --arg path "$ws_path" --arg host "$ws_host" \
                         '{network:"ws",wsSettings:{path:$path,headers:{Host:$host}}}')
                 fi
+            elif [[ "$net" == "grpc" ]]; then
+                if [[ -z "$service_name" ]]; then
+                    service_name="$ws_path"
+                    [[ -z "$service_name" || "$service_name" == "/" ]] && service_name="grpc"
+                fi
+                stream=$(jq -n --arg sn "$service_name" --arg authority "$authority" '
+                    {
+                      network: "grpc",
+                      grpcSettings: (
+                        if ($authority | length) > 0 then
+                          {serviceName: $sn, authority: $authority}
+                        else
+                          {serviceName: $sn}
+                        end
+                      )
+                    }')
+                if [[ "$security" == "tls" ]]; then
+                    stream=$(echo "$stream" | jq --arg sni "$sni" --arg fp "$fp" '
+                        .security="tls"
+                        | .tlsSettings={serverName:$sni,fingerprint:$fp}')
+                fi
+            elif [[ "$net" == "httpupgrade" ]]; then
+                stream=$(jq -n --arg path "$ws_path" --arg host "$ws_host" '
+                    {
+                      network:"httpupgrade",
+                      httpupgradeSettings:{
+                        path: (if ($path | length) > 0 then $path else "/" end),
+                        host: $host
+                      }
+                    }')
+                if [[ "$security" == "tls" ]]; then
+                    stream=$(echo "$stream" | jq --arg sni "$sni" --arg fp "$fp" '
+                        .security="tls"
+                        | .tlsSettings={serverName:$sni,fingerprint:$fp}')
+                fi
+            elif [[ "$net" == "xhttp" ]]; then
+                stream=$(jq -n --arg path "$ws_path" --arg host "$ws_host" --arg mode "$mode" '
+                    {
+                      network:"xhttp",
+                      xhttpSettings:{
+                        path: (if ($path | length) > 0 then $path else "/" end),
+                        host: $host,
+                        mode: (if ($mode | length) > 0 then $mode else "auto" end)
+                      }
+                    }')
+                if [[ "$security" == "tls" ]]; then
+                    stream=$(echo "$stream" | jq --arg sni "$sni" --arg fp "$fp" '
+                        .security="tls"
+                        | .tlsSettings={serverName:$sni,fingerprint:$fp}')
+                fi
             elif [[ "$security" == "reality" ]]; then
                 stream=$(jq -n --arg sni "$sni" --arg fp "$fp" --arg pbk "$pbk" --arg sid "$sid" \
                     '{network:"tcp",security:"reality",realitySettings:{serverName:$sni,fingerprint:$fp,publicKey:$pbk,shortId:$sid}}')
             elif [[ "$security" == "tls" ]]; then
                 stream=$(jq -n --arg sni "$sni" --arg fp "$fp" \
                     '{network:"tcp",security:"tls",tlsSettings:{serverName:$sni,fingerprint:$fp}}')
+            fi
+
+            if [[ "$security" == "tls" && "$allow_insecure" == "1" ]]; then
+                stream=$(echo "$stream" | jq '.tlsSettings = (.tlsSettings // {}) | .tlsSettings.allowInsecure = true')
+            fi
+            if [[ "$security" == "tls" && -n "$alpn" ]]; then
+                stream=$(echo "$stream" | jq --arg alpn "$alpn" '.tlsSettings = (.tlsSettings // {}) | .tlsSettings.alpn = ($alpn | split(",") | map(select(length>0)))')
             fi
             
             # 生成 outbound，如果有 flow 则添加
