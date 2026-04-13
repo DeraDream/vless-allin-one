@@ -22,10 +22,8 @@ readonly AUTHOR="Chil30"
 readonly REPO_URL="https://gitlab.com/chil30-group/vless-all-in-one"
 readonly SCRIPT_REPO="chil30-group/vless-all-in-one"
 readonly SCRIPT_RAW_URL="https://gitlab.com/chil30-group/vless-all-in-one/-/raw/main/vless-server.sh"
-readonly CFG="${VLESS_CFG:-/etc/vless-reality}"
+readonly CFG="/etc/vless-reality"
 readonly ACME_DEFAULT_EMAIL="acme@vaio.com"
-INSTALL_MODE="${INSTALL_MODE:-}"
-REPLACE_PORT="${REPLACE_PORT:-}"
 
 # curl 超时常量
 readonly CURL_TIMEOUT_FAST=5
@@ -10471,9 +10469,6 @@ stop_services() {
 
 # 自动更新系统脚本 (启动时检测)
 _auto_update_system_script() {
-    if [[ "${VLESS_KEEP_PANEL_CLI:-0}" == "1" ]]; then
-        return 0
-    fi
     local system_script="/usr/local/bin/vless-server.sh"
     local current_script="$0"
     
@@ -10511,10 +10506,6 @@ _auto_update_system_script() {
 }
 
 create_shortcut() {
-    if [[ "${VLESS_KEEP_PANEL_CLI:-0}" == "1" ]]; then
-        _info "宸茶烦杩? vless 蹇嵎鍛戒护鍚屾锛屼繚鐣欓潰鏉跨鐞嗗叆鍙?"
-        return 0
-    fi
     local system_script="/usr/local/bin/vless-server.sh"
     local current_script="$0"
 
@@ -18049,8 +18040,8 @@ do_install_server() {
             local uuid=$(gen_uuid) sid=$(gen_sid)
             local keys=$(xray x25519 2>/dev/null)
             [[ -z "$keys" ]] && { _err "密钥生成失败"; _pause; return 1; }
-            local privkey=$(echo "$keys" | grep "PrivateKey:" | awk '{print $2}')
-            local pubkey=$(echo "$keys" | grep "Password:" | awk '{print $2}')
+            local privkey=$(echo "$keys" | awk '/PrivateKey:/ {print $NF; exit}')
+            local pubkey=$(echo "$keys" | awk '/Password/ {print $NF; exit}')
             [[ -z "$privkey" || -z "$pubkey" ]] && { _err "密钥提取失败"; _pause; return 1; }
             
             # 使用统一的证书和 Nginx 配置函数
@@ -18111,8 +18102,8 @@ do_install_server() {
                 local sid=$(gen_sid)
                 local keys=$(xray x25519 2>/dev/null)
                 [[ -z "$keys" ]] && { _err "密钥生成失败"; _pause; return 1; }
-                local privkey=$(echo "$keys" | grep "PrivateKey:" | awk '{print $2}')
-                local pubkey=$(echo "$keys" | grep "Password:" | awk '{print $2}')
+                local privkey=$(echo "$keys" | awk '/PrivateKey:/ {print $NF; exit}')
+                local pubkey=$(echo "$keys" | awk '/Password/ {print $NF; exit}')
                 [[ -z "$privkey" || -z "$pubkey" ]] && { _err "密钥提取失败"; _pause; return 1; }
                 
                 # 使用统一的证书和 Nginx 配置函数
@@ -24839,74 +24830,67 @@ main_menu() {
     done
 }
 
-main_cli() {
-    case "${1:-}" in
-        --sync-traffic)
-            # 静默模式：用于定时任务
-            init_db
-            sync_all_user_traffic "true"
-            return 0
-            ;;
-        --show-traffic)
-            # 显示流量统计
-            init_db
-            get_all_traffic_stats
-            return 0
-            ;;
-        --check-expire)
-            # 检查并禁用过期用户，发送提醒
-            init_db
-            echo "检查用户到期状态..."
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 开始过期检查..." >> "$CFG/expire.log"
-            # 发送即将过期提醒 (3天内)
-            warnings=$(send_expire_warnings 3)
-            echo "  发送 $warnings 条过期提醒" >> "$CFG/expire.log"
-            # 禁用过期用户
-            if [[ "${2:-}" == "--notify" ]]; then
-                disabled=$(check_and_disable_expired_users --notify)
-            else
-                disabled=$(check_and_disable_expired_users)
-            fi
-            echo "  禁用 $disabled 个过期用户" >> "$CFG/expire.log"
-            # 输出结果到终端
-            echo "  即将过期提醒: $warnings 条"
-            echo "  禁用过期用户: $disabled 个"
-            echo "完成。日志: $CFG/expire.log"
-            return 0
-            ;;
-        --setup-expire-cron)
-            # 安装过期检查定时任务
-            init_db
-            install_expire_check_cron
-            return 0
-            ;;
-        --help|-h)
-            echo "用法: $0 [选项]"
-            echo ""
-            echo "选项:"
-            echo "  --sync-traffic       同步流量数据到数据库 (用于定时任务)"
-            echo "  --show-traffic       显示实时流量统计"
-            echo "  --check-expire       检查并禁用过期用户 (用于定时任务)"
-            echo "  --setup-expire-cron  安装过期检查定时任务"
-            echo "  --help, -h           显示帮助信息"
-            echo ""
-            echo "无参数时启动交互式菜单"
-            return 0
-            ;;
-        "")
-            # 无参数，启动主菜单
-            main_menu
-            return 0
-            ;;
-        *)
-            echo "未知参数: $1"
-            echo "使用 --help 查看帮助"
-            return 1
-            ;;
-    esac
-}
-
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    main_cli "$@"
-    exit $?
-fi
+# 命令行参数处理
+case "${1:-}" in
+    --sync-traffic)
+        # 静默模式：用于定时任务
+        init_db
+        sync_all_user_traffic "true"
+        exit 0
+        ;;
+    --show-traffic)
+        # 显示流量统计
+        init_db
+        get_all_traffic_stats
+        exit 0
+        ;;
+    --check-expire)
+        # 检查并禁用过期用户，发送提醒
+        init_db
+        echo "检查用户到期状态..."
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 开始过期检查..." >> "$CFG/expire.log"
+        # 发送即将过期提醒 (3天内)
+        warnings=$(send_expire_warnings 3)
+        echo "  发送 $warnings 条过期提醒" >> "$CFG/expire.log"
+        # 禁用过期用户
+        if [[ "${2:-}" == "--notify" ]]; then
+            disabled=$(check_and_disable_expired_users --notify)
+        else
+            disabled=$(check_and_disable_expired_users)
+        fi
+        echo "  禁用 $disabled 个过期用户" >> "$CFG/expire.log"
+        # 输出结果到终端
+        echo "  即将过期提醒: $warnings 条"
+        echo "  禁用过期用户: $disabled 个"
+        echo "完成。日志: $CFG/expire.log"
+        exit 0
+        ;;
+    --setup-expire-cron)
+        # 安装过期检查定时任务
+        init_db
+        install_expire_check_cron
+        exit 0
+        ;;
+    --help|-h)
+        echo "用法: $0 [选项]"
+        echo ""
+        echo "选项:"
+        echo "  --sync-traffic       同步流量数据到数据库 (用于定时任务)"
+        echo "  --show-traffic       显示实时流量统计"
+        echo "  --check-expire       检查并禁用过期用户 (用于定时任务)"
+        echo "  --setup-expire-cron  安装过期检查定时任务"
+        echo "  --help, -h           显示帮助信息"
+        echo ""
+        echo "无参数时启动交互式菜单"
+        exit 0
+        ;;
+    "")
+        # 无参数，启动主菜单
+        main_menu
+        ;;
+    *)
+        echo "未知参数: $1"
+        echo "使用 --help 查看帮助"
+        exit 1
+        ;;
+esac
